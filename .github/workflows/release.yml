@@ -13,10 +13,13 @@ jobs:
         include:
           - os: macos-latest
             bun_target: bun-darwin-arm64
+            bundles: app
           - os: windows-latest
             bun_target: bun-windows-x64
+            bundles: nsis
           - os: ubuntu-22.04
             bun_target: bun-linux-x64
+            bundles: 'deb appimage'
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -42,14 +45,13 @@ jobs:
           bun build --compile --target=${{ matrix.bun_target }} packages/server/src/index.ts --outfile packages/desktop/src-tauri/binaries/materin-server
           cp packages/web/dist/index.html packages/web/dist/main.js packages/desktop/src-tauri/binaries/web/
 
-      # Windows: the Tauri bundler expects the sidecar next to the exe; we inject
-      # after the app-only bundle the same way the macOS build script does.
+      # bundles 按平台分派: macOS=app, Windows=nsis, Linux=deb+appimage ('app' 仅 macOS 合法)
       - name: Tauri build
         working-directory: packages/desktop
         shell: bash
-        run: bunx @tauri-apps/cli build --bundles app
+        run: bunx @tauri-apps/cli build --bundles ${{ matrix.bundles }}
 
-      - name: Package macOS (inject + dmg)
+      - name: Package macOS (inject sidecar + dmg)
         if: runner.os == 'macOS'
         shell: bash
         run: |
@@ -62,27 +64,30 @@ jobs:
           mkdir -p release
           hdiutil create -volname "materin" -srcfolder "$STAGING" -ov -format UDZO "release/materin-desktop.dmg"
 
-      - name: Package (Windows)
+      - name: Package (Windows, nsis)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $exe = "packages/desktop/src-tauri/target/release/materin-desktop.exe"
           $dir = "packages/desktop/src-tauri/target/release"
           Copy-Item packages/desktop/src-tauri/binaries/materin-server.exe "$dir/materin-server.exe"
           New-Item -ItemType Directory -Force "$dir/web" | Out-Null
           Copy-Item packages/desktop/src-tauri/binaries/web/* "$dir/web/"
-          Compress-Archive -Path $exe, "$dir/materin-server.exe", "$dir/web" -DestinationPath release/materin-desktop-windows.zip
+          $nsis = "packages/desktop/src-tauri/target/release/bundle/nsis"
+          if (Test-Path $nsis) { Copy-Item "$nsis/*.exe" release/ -ErrorAction SilentlyContinue }
+          New-Item -ItemType Directory -Force release | Out-Null
+          Compress-Archive -Path "$dir/materin-desktop.exe", "$dir/materin-server.exe", "$dir/web" -DestinationPath release/materin-desktop-windows.zip
 
-      - name: Package (Linux)
+      - name: Package (Linux, deb + appimage + tarball)
         if: runner.os == 'Linux'
         shell: bash
         run: |
           DIR="packages/desktop/src-tauri/target/release"
           cp packages/desktop/src-tauri/binaries/materin-server "$DIR/materin-server"
-          mkdir -p "$DIR/web"
+          mkdir -p "$DIR/web" release
           cp packages/desktop/src-tauri/binaries/web/* "$DIR/web/"
-          mkdir -p release
           tar czf release/materin-desktop-linux.tar.gz -C "$DIR" materin-desktop materin-server web
+          cp packages/desktop/src-tauri/target/release/bundle/deb/*.deb release/ 2>/dev/null || true
+          cp packages/desktop/src-tauri/target/release/bundle/appimage/*.AppImage release/ 2>/dev/null || true
 
       - name: Upload macOS artifacts
         if: runner.os == 'macOS'
@@ -98,11 +103,33 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: materin-desktop-windows
-          path: release/materin-desktop-windows.zip
+          path: |
+            release/**
+            packages/desktop/src-tauri/target/release/bundle/nsis/*.exe
 
       - name: Upload Linux artifacts
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: materin-desktop-linux
-          path: release/materin-desktop-linux.tar.gz
+          path: |
+            release/**
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: artifacts
+
+      - name: Create GitHub Release with artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**
+          generate_release_notes: true

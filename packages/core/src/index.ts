@@ -10,6 +10,17 @@ export {
 } from './session/store'
 export { searchMessages, extractPlainText, ftsIndexMessage } from './session/search'
 export type { SearchHit } from './session/search'
+export {
+  usageSummary,
+  periodSinceMs,
+  type UsagePeriod,
+  type UsageQuery,
+  type UsageSummary,
+  type UsageTotals,
+  type UsageModelRow,
+  type UsageDayRow,
+  type UsageCallRow,
+} from './session/usage'
 export { Bus, type Listener } from './bus'
 export { createDefaultTools, bashTool, readTool, editTool, writeTool } from './tools'
 export type { Tool, ToolContext, ToolOutput } from './tools/types'

@@ -1,5 +1,6 @@
 import { join, dirname, resolve, isAbsolute } from 'node:path'
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import type { Database } from 'bun:sqlite'
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import {
@@ -11,9 +12,11 @@ import {
   saveConfig,
   applyConfigToEnv,
   PROVIDER_PRESETS,
+  usageSummary,
   type MaterinConfig,
   type ResolveProvider,
   type MemoryStore,
+  type UsagePeriod,
 } from '@materin/core'
 import type { AgentEvent, AgentSession, Bus, LoadedExtensions, SessionStore } from '@materin/core'
 import { listAvailableModels, normalizeThinking, resolveModel } from '@materin/ai'
@@ -35,6 +38,7 @@ export interface ServerDeps {
   reloadExtensions?: () => Promise<void>
   reflect?: (sessionId: string) => Promise<void>
   getMemory?: (sessionId: string) => MemoryStore
+  getDb?: () => Database
 }
 
 export function createApp(deps: ServerDeps): Hono {
@@ -46,6 +50,7 @@ export function createApp(deps: ServerDeps): Hono {
     resolveProvider: resolveProvider,
     getMemory: deps.getMemory,
     getExtensions: deps.getExtensions,
+    getDb: deps.getDb,
   })
 
   app.get('/', (c) => c.json({ name: 'materin-server', version: '0.1.0' }))
@@ -317,6 +322,15 @@ export function createApp(deps: ServerDeps): Hono {
   })
 
   app.get('/models', (c) => c.json(listAvailableModels()))
+
+  const USAGE_PERIODS: readonly string[] = ['today', '7d', '30d', 'all']
+  app.get('/usage', (c) => {
+    if (!deps.getDb) return c.json({ error: 'usage db not configured' }, 400)
+    const raw = c.req.query('period') ?? 'all'
+    const period = (USAGE_PERIODS as readonly string[]).includes(raw) ? (raw as UsagePeriod) : 'all'
+    const model = c.req.query('model') || undefined
+    return c.json(usageSummary(deps.getDb(), { period: period, model: model }))
+  })
 
   app.post('/session/:id/permission/:callId', async (c) => {
     const sessionId = c.req.param('id')

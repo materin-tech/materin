@@ -1,6 +1,7 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { Database } from 'bun:sqlite'
 import { createApp } from '@materin/server'
 import {
   openDb,
@@ -51,6 +52,7 @@ export function sleep(ms: number): Promise<void> {
 export interface TestServer {
   base: string
   store: SessionStore
+  db: Database
   faux: FauxProvider
   setProvider(p: Provider): void
   get(path: string): Promise<Response>
@@ -60,7 +62,8 @@ export interface TestServer {
 }
 
 export function startTestServer(): TestServer {
-  const store = new SessionStore(openDb(':memory:'))
+  const db = openDb(':memory:')
+  const store = new SessionStore(db)
   const bus = new Bus<AgentEvent>()
   const faux = fauxProvider()
   let current: Provider = faux
@@ -80,6 +83,7 @@ export function startTestServer(): TestServer {
     resolveProvider: () => ({ provider: current, api: 'anthropic' as const }),
     answerPermission: () => false,
     getMemory: () => new MemoryStore(mkdtempSync(join(tmpdir(), 'materin-mem-'))),
+    getDb: () => db,
   })
 
   const server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: app.fetch, idleTimeout: 255 })
@@ -88,6 +92,7 @@ export function startTestServer(): TestServer {
   return {
     base: base,
     store: store,
+    db: db,
     faux: faux,
     setProvider(p: Provider): void {
       current = p

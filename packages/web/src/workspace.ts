@@ -45,7 +45,10 @@ function renderLabel(): void {
 }
 
 function openModal(): void {
-  if (modal === null) modal = buildModal()
+  if (modal === null) {
+    modal = buildModal()
+    document.body.appendChild(modal)   // buildModal 只构建节点, 必须挂到 DOM
+  }
   curPath!.textContent = '当前: ' + ws
   pathInput!.value = ws
   modal.style.display = 'flex'

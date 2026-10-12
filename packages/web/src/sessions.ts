@@ -51,16 +51,14 @@ export async function reloadCurrent(): Promise<void> {
 }
 
 export async function newSession(): Promise<void> {
-  // 默认使用服务器当前工作空间 — 留空即一键创建; 也可手动覆盖。
-  const ws = await api<{ workspace: string }>('/workspace')
+  // 一键创建: 直接使用服务器当前工作空间 (切换目录用 ⌂ 工作空间)
+  const cwd = await api<{ workspace: string }>('/workspace')
     .then((r) => r.workspace)
     .catch(() => '/')
-  const cwd = window.prompt('工作目录 (留空使用当前工作空间):', ws)
-  if (cwd === null) return
   const created = await api<SessionRow>('/session', {
     method: 'POST',
     headers: json,
-    body: JSON.stringify({ cwd: cwd.trim() || ws }),
+    body: JSON.stringify({ cwd }),
   })
   await loadSessions()
   await openSession(created.id)

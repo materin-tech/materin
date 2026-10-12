@@ -16,11 +16,12 @@ export function acActive(): boolean {
   return acItems.length > 0
 }
 
-function atTokenOf(text: string): string {
+/** 无 '@' → null; '@' 后空 token → '' (CC 对齐: 打 @ 立即列出文件); 否则返回 token. */
+function atTokenOf(text: string): string | null {
   const at = text.lastIndexOf('@')
-  if (at < 0) return ''
+  if (at < 0) return null
   const after = text.slice(at + 1)
-  if (/\s/.test(after)) return ''
+  if (/\s/.test(after)) return null
   return after
 }
 
@@ -41,6 +42,9 @@ function applyAc(active: number): void {
     }
     fileAcEl.append(item)
   })
+  // 方向键移动高亮时, 列表滚动跟随高亮项
+  const activeEl = fileAcEl.children[active] as HTMLElement | undefined
+  activeEl?.scrollIntoView({ block: 'nearest' })
 }
 
 function completeAc(path: string): void {
@@ -55,7 +59,7 @@ function completeAc(path: string): void {
 function refreshAc(): void {
   const input = inputEl()
   const token = atTokenOf(input.value.slice(0, input.selectionStart ?? input.value.length))
-  if (token.length === 0 || state.sessionId === null) {
+  if (token === null || state.sessionId === null) {
     closeAc()
     return
   }

@@ -12,6 +12,7 @@ import { initComposer } from './composer'
 import { initComposerResize } from './composer-resize'
 import { acActive } from './ac'
 import { initConfigModal, openConfigModal, type MaskedConfig } from './config-modal'
+import { initUsageView } from './usage-view'
 import { initWorkspace } from './workspace'
 import { connectEvents } from './stream'
 
@@ -83,6 +84,7 @@ function boot(): void {
   initComposer()
   initComposerResize()
   initConfigModal()
+  initUsageView()
   initUnconfiguredChip()
   void initWorkspace()
   connectEvents({
@@ -91,6 +93,13 @@ function boot(): void {
     system: appendSystem,
   })
   void loadSessions()
+    .then(async (first: unknown) => {
+      // CC 对齐: 加载后即有上下文 — 自动打开最近会话, 没有则一键新建 (当前工作空间)
+      const sessions = await api<Array<{ id: string }>>('/session').catch(() => [])
+      if (Array.isArray(sessions) && sessions.length > 0) await openSession(sessions[0]!.id)
+      else await newSession()
+      return first
+    })
   void initOnboarding()
 }
 

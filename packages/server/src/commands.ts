@@ -10,7 +10,9 @@ import {
   type SessionStore,
   type ResolveProvider,
 } from '@materin/core'
+import type { Database } from 'bun:sqlite'
 import { listAvailableModels, normalizeThinking, resolveModel } from '@materin/ai'
+import { runTokenCommand } from './usage-format'
 import type { Context } from 'hono'
 
 /**
@@ -36,6 +38,7 @@ export const BUILTIN_COMMANDS: CommandSpec[] = [
   { name: '/plan', description: '快捷切换到 plan 模式' },
   { name: '/passon', description: '快捷切换到 passon 模式' },
   { name: '/status', description: '会话状态: model/thinking/mode/tokens/消息数' },
+  { name: '/token', description: '查看模型调用 token 统计 (today|7d|30d|all, 默认当前会话)', usage: '[period]' },
   { name: '/skills', description: '列出已发现的 skills' },
   { name: '/memory', description: '显示当前项目记忆快照 (MEMORY.md)' },
   { name: '/search', description: '跨会话搜索', usage: '<query>' },
@@ -50,6 +53,7 @@ export interface CommandCtx {
   resolveProvider: ResolveProvider
   getMemory?: (sessionId: string) => MemoryStore
   getExtensions?: () => LoadedExtensions | undefined
+  getDb?: () => Database
 }
 
 export type CommandHandler = (c: Context, sessionId: string, arg?: string) => Promise<Response>
@@ -155,25 +159,28 @@ export function buildCommandRegistry(ctx: CommandCtx): CommandRegistry {
     ].join('\n')
     return c.json({ command: true, output: output })
   })
-  add({ name: '/skills', description: BUILTIN_COMMANDS[10]!.description }, async (c, sessionId) => {
+  add({ name: '/token', description: BUILTIN_COMMANDS[10]!.description, usage: '[period]' }, (c, sessionId, arg) =>
+    runTokenCommand(ctx, c, sessionId, arg),
+  )
+  add({ name: '/skills', description: BUILTIN_COMMANDS[11]!.description }, async (c, sessionId) => {
     const session = needSession(c, sessionId)
     if (!session) return c.json({ error: 'not found' }, 404)
     const skills = discoverSkills(session.cwd ?? process.cwd())
     const output = skills.length === 0 ? '(no skills found)' : skills.map((s) => s.name + (s.description ? ' — ' + s.description : '')).join('\n')
     return c.json({ command: true, output: output })
   })
-  add({ name: '/memory', description: BUILTIN_COMMANDS[11]!.description }, async (c, sessionId) => {
+  add({ name: '/memory', description: BUILTIN_COMMANDS[12]!.description }, async (c, sessionId) => {
     const snapshot = ctx.getMemory?.(sessionId).readSnapshot() ?? ''
     return c.json({ command: true, output: snapshot.trim().length > 0 ? snapshot : '(empty)' })
   })
-  add({ name: '/search', description: BUILTIN_COMMANDS[12]!.description, usage: '<query>' }, async (c, _sid, arg) => {
+  add({ name: '/search', description: BUILTIN_COMMANDS[13]!.description, usage: '<query>' }, async (c, _sid, arg) => {
     const q = (arg ?? '').trim()
     if (q.length === 0) return c.json({ command: true, output: 'usage: /search <query>', error: 'query required' })
     const hits = ctx.store.search(q, 10)
     const output = hits.length === 0 ? '(无结果)' : hits.map((h) => '[' + h.sessionId + '] ' + h.snippet.replace(/\s+/g, ' ').trim()).join('\n')
     return c.json({ command: true, output: output })
   })
-  add({ name: '/branch', description: BUILTIN_COMMANDS[13]!.description, usage: '[messageId]' }, async (c, sessionId, arg) => {
+  add({ name: '/branch', description: BUILTIN_COMMANDS[14]!.description, usage: '[messageId]' }, async (c, sessionId, arg) => {
     const target = (arg ?? '').trim()
     if (!target) {
       const chain = ctx.store.getMessagesToLeaf(sessionId)
@@ -193,17 +200,17 @@ export function buildCommandRegistry(ctx: CommandCtx): CommandRegistry {
       return c.json({ command: true, error: errText(e) }, 400)
     }
   })
-  add({ name: '/extensions', description: BUILTIN_COMMANDS[14]!.description }, async (c) => {
+  add({ name: '/extensions', description: BUILTIN_COMMANDS[15]!.description }, async (c) => {
     const ext = ctx.getExtensions?.()
     const commands = ext ? [...ext.commands.keys()] : []
     const tools = ext?.tools.length ?? 0
     const output = commands.length === 0 && tools === 0 ? '(none)' : 'tools: ' + tools + '\ncommands: ' + (commands.map((n) => '/' + n).join(', ') || '(none)')
     return c.json({ command: true, output: output })
   })
-  add({ name: '/version', description: BUILTIN_COMMANDS[15]!.description }, async (c) =>
+  add({ name: '/version', description: BUILTIN_COMMANDS[16]!.description }, async (c) =>
     c.json({ command: true, output: 'materin ' + VERSION }),
   )
-  add({ name: '/exit', description: BUILTIN_COMMANDS[16]!.description }, async (c) =>
+  add({ name: '/exit', description: BUILTIN_COMMANDS[17]!.description }, async (c) =>
     c.json({ command: true, error: 'exit is handled by the client' }, 400),
   )
   return registry

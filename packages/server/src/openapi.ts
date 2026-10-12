@@ -33,6 +33,11 @@ export function openApiSpec(): Record<string, unknown> {
         get: op('masked config view (hasKey flags, no keys)'),
         post: op('merge provider config (apiKey/baseUrl/defaultModel), returns masked view'),
       },
+      '/workspace': {
+        get: op('get the active workspace (default cwd for new sessions)'),
+        post: op('switch the active workspace', body({ cwd: str }, ['cwd'])),
+      },
+      '/fs/dirs': { get: op('list subdirectories for the workspace browser (?path= absolute dir)') },
       '/session/{id}/messages': {
         get: op('full message chain for history/export', undefined, okJson(array(messageRef))),
       },

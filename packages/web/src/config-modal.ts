@@ -1,12 +1,14 @@
 /**
  * Visual config editor: header button opens a modal to edit provider keys,
- * base URLs and default model. Keys are write-only (server returns hasKey flags).
+ * base URLs and default model. Keys are write-only (server returns hasKey
+ * flags). Doubles as the onboarding surface: openConfigModal(title) is called
+ * automatically on load when no provider is configured.
  */
 import { el } from './render'
 import { api, json } from './api'
 import { toast } from './ui'
 
-interface MaskedConfig {
+export interface MaskedConfig {
   defaultModel: string | null
   providers: Record<string, { hasKey: boolean; baseUrl?: string }>
 }
@@ -22,16 +24,24 @@ const PROVIDER_LABELS: Record<string, string> = {
 
 let modal: HTMLElement | null = null
 let cfg: MaskedConfig | null = null
+let titleEl: HTMLElement | null = null
+let closeOnSave = false
 
 export function initConfigModal(): void {
   const btn = document.getElementById('config-btn')
   if (btn === null || modal !== null) return
   modal = buildModal()
   document.body.append(modal)
-  btn.addEventListener('click', () => {
-    modal!.style.display = 'flex'
-    void loadConfig()
-  })
+  btn.addEventListener('click', () => openConfigModal())
+}
+
+/** Open the config modal, optionally in onboarding mode (custom title + auto-close after save). */
+export function openConfigModal(title?: string, autoClose = false): void {
+  if (modal === null) return
+  closeOnSave = autoClose
+  if (titleEl !== null) titleEl.textContent = title ?? '配置'
+  modal.style.display = 'flex'
+  void loadConfig()
 }
 
 async function loadConfig(): Promise<void> {
@@ -70,10 +80,12 @@ function buildModal(): HTMLElement {
   const closeBtn = el('button', 'cfg-btn secondary', '关闭')
   closeBtn.onclick = () => {
     modal!.style.display = 'none'
+    closeOnSave = false
   }
   actions.append(saveBtn, closeBtn)
+  titleEl = el('div', 'cfg-title', '配置')
   panel.append(
-    el('div', 'cfg-title', '配置'),
+    titleEl,
     wrap('Provider', provider),
     status,
     wrap('API Key (写入后不可见)', key),
@@ -120,6 +132,11 @@ async function save(): Promise<void> {
   const body: { providers: Record<string, { apiKey?: string; baseUrl?: string }>; defaultModel?: string } = { providers: providers }
   if (ctl.model.value.trim().length > 0) body.defaultModel = ctl.model.value.trim()
   cfg = await api<MaskedConfig>('/config', { method: 'POST', headers: json, body: JSON.stringify(body) })
-  toast('已保存')
+  document.dispatchEvent(new CustomEvent('materin:config-saved', { detail: cfg }))
+  if (closeOnSave) {
+    closeOnSave = false
+    modal!.style.display = 'none'
+  }
+  toast('模型配置已保存')
   fillFromConfig()
 }

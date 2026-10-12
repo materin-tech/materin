@@ -10,8 +10,36 @@ import { appendSystem } from './ui'
 import { loadSessions, openSession, newSession, reloadCurrent } from './sessions'
 import { initComposer } from './composer'
 import { acActive } from './ac'
-import { initConfigModal } from './config-modal'
+import { initConfigModal, openConfigModal, type MaskedConfig } from './config-modal'
+import { initWorkspace } from './workspace'
 import { connectEvents } from './stream'
+
+const ONBOARDING_TITLE = '欢迎使用 materin — 请先配置模型 provider'
+
+/** Unconfigured-model hint chip: visible until any provider has a key. */
+function initUnconfiguredChip(): void {
+  const chip = document.getElementById('unconfigured-chip')
+  if (chip === null) return
+  chip.addEventListener('click', () => openConfigModal())
+  document.addEventListener('materin:config-saved', (e) => {
+    const cfg = (e as CustomEvent).detail as MaskedConfig | undefined
+    const hasKey = cfg !== undefined && Object.values(cfg.providers).some((p) => p.hasKey)
+    chip.style.display = hasKey ? 'none' : 'inline-block'
+  })
+}
+
+/** Onboarding: with no provider key, auto-open the config modal once. */
+async function initOnboarding(): Promise<void> {
+  try {
+    const cfg = await api<MaskedConfig>('/config')
+    const hasKey = Object.values(cfg.providers).some((p) => p.hasKey)
+    const chip = document.getElementById('unconfigured-chip')
+    if (chip !== null) chip.style.display = hasKey ? 'none' : 'inline-block'
+    if (!hasKey) openConfigModal(ONBOARDING_TITLE)
+  } catch {
+    // config endpoint unavailable — skip onboarding silently
+  }
+}
 
 async function runSearch(): Promise<void> {
   const searchInputEl = document.getElementById('search-input') as HTMLInputElement
@@ -53,12 +81,15 @@ function boot(): void {
   initModeSelect()
   initComposer()
   initConfigModal()
+  initUnconfiguredChip()
+  void initWorkspace()
   connectEvents({
     isCurrent: (sessionId: string) => sessionId === state.sessionId,
     reload: () => reloadCurrent(),
     system: appendSystem,
   })
   void loadSessions()
+  void initOnboarding()
 }
 
 boot()

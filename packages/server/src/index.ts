@@ -37,9 +37,10 @@ if (dIdx > 0 && process.argv[dIdx + 1]) process.env.MATERIN_HOME = process.argv[
 const bootCfg = loadConfig()
 applyConfigToEnv(bootCfg)
 if (!process.env.MATERIN_MODEL && bootCfg?.defaultModel) process.env.MATERIN_MODEL = bootCfg.defaultModel
+// 桌面端/Web 用户看不到终端报错, 服务端不因缺少模型配置而退出 —
+// GUI 会引导用户完成配置 (gateway 等无人值守入口仍 fail-fast)。
 if (configuredProviders(bootCfg).length === 0) {
-  console.error('未检测到模型配置。先运行: materin  (交互式配置)  或 export <PROVIDER>_API_KEY')
-  process.exit(1)
+  console.log('未检测到模型配置 — 打开 Web 界面完成配置引导 (或运行 materin config)')
 }
 
 const db = openDb()

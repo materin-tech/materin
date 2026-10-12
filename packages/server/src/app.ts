@@ -1,5 +1,5 @@
-import { join, dirname } from 'node:path'
-import { existsSync } from 'node:fs'
+import { join, dirname, resolve, isAbsolute } from 'node:path'
+import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import {
@@ -49,6 +49,49 @@ export function createApp(deps: ServerDeps): Hono {
   })
 
   app.get('/', (c) => c.json({ name: 'materin-server', version: '0.1.0' }))
+
+  // ---- active workspace: new sessions default to it; GUI can switch anytime ----
+  let activeWorkspace = process.env.MATERIN_WORKSPACE ?? process.cwd()
+
+  app.get('/workspace', (c) => c.json({ workspace: activeWorkspace }))
+
+  app.post('/workspace', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { cwd?: string }
+    const cwd = typeof body.cwd === 'string' ? body.cwd.trim() : ''
+    if (cwd.length === 0 || !isAbsolute(cwd)) return c.json({ error: 'cwd must be an absolute path' }, 400)
+    try {
+      mkdirSync(cwd, { recursive: true })
+      activeWorkspace = resolve(cwd)
+      return c.json({ workspace: activeWorkspace })
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      return c.json({ error: message }, 400)
+    }
+  })
+
+  app.get('/fs/dirs', (c) => {
+    const path = resolve(c.req.query('path') ?? activeWorkspace)
+    let stat
+    try {
+      stat = statSync(path)
+    } catch {
+      return c.json({ error: 'path not found: ' + path }, 400)
+    }
+    if (!stat.isDirectory()) return c.json({ error: 'not a directory: ' + path }, 400)
+    const dirs: string[] = []
+    for (const name of readdirSync(path)) {
+      if (name.startsWith('.') || name === 'node_modules') continue
+      try {
+        if (statSync(join(path, name)).isDirectory()) dirs.push(name)
+      } catch {
+        // unreadable entry — skip
+      }
+      if (dirs.length >= 200) break
+    }
+    dirs.sort()
+    const parent = dirname(path)
+    return c.json({ path: path, parent: parent === path ? null : parent, dirs: dirs })
+  })
   app.get('/openapi.json', (c) => c.json(openApiSpec()))
   app.get('/ui', (c) => c.redirect('/ui/'))
   app.get('/ui/*', (c) => serveUi(new URL(c.req.url).pathname))
@@ -56,7 +99,7 @@ export function createApp(deps: ServerDeps): Hono {
   app.post('/session', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { cwd?: string; model?: string; thinkingLevel?: string; permissionMode?: string }
     const session = store.createSession({
-      cwd: body.cwd ?? process.cwd(),
+      cwd: body.cwd ?? activeWorkspace,
       model: body.model ?? process.env.MATERIN_MODEL ?? 'claude-sonnet-5-5',
     })
     // 环境变量兜底新会话默认值 (Docker/云端部署用)

@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   openDb,
@@ -11,6 +10,11 @@ import {
   MemoryStore,
   projectIdForCwd,
   loadExtensions,
+  materinHome,
+  ensureModelConfigured,
+  configuredProviders,
+  loadConfig,
+  applyConfigToEnv,
 } from '@materin/core'
 import { createAnthropicProvider, createOpenAIProvider, getModel } from '@materin/ai'
 import { Gateway } from './gateway'
@@ -23,10 +27,21 @@ import { ConsoleAdapter } from './adapters/console'
  * gateway binary: 按环境变量注册渠道适配器并启动.
  */
 
+// -d <dir> 指定数据根目录 (默认 ~/.materin); 必须在 openDb 之前设置
+const dIdx = process.argv.indexOf('-d')
+if (dIdx > 0 && process.argv[dIdx + 1]) process.env.MATERIN_HOME = process.argv[dIdx + 1]!
+
+const bootCfg = loadConfig()
+applyConfigToEnv(bootCfg)
+if (configuredProviders(bootCfg).length === 0) {
+  console.error('未检测到模型配置。先运行: materin  (交互式配置)  或 export <PROVIDER>_API_KEY')
+  process.exit(1)
+}
+
 const db = openDb()
 const store = new SessionStore(db)
 
-const extensionDirs: string[] = [join(homedir(), '.materin', 'extensions')]
+const extensionDirs: string[] = [join(materinHome(), 'extensions')]
 const projectExtDir = join(process.cwd(), '.materin', 'extensions')
 if (existsSync(join(projectExtDir, 'trust.json'))) extensionDirs.push(projectExtDir)
 const extensions = await loadExtensions(extensionDirs)
@@ -43,7 +58,7 @@ const tools = [...baseTools, taskTool]
 
 function memoryFor(sessionId: string): MemoryStore {
   return new MemoryStore(
-    join(homedir(), '.materin', 'memories', projectIdForCwd(store.getSession(sessionId)?.cwd ?? process.cwd())),
+    join(materinHome(), 'memories', projectIdForCwd(store.getSession(sessionId)?.cwd ?? process.cwd())),
   )
 }
 const permissions = new PermissionManager(

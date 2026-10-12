@@ -43,3 +43,5 @@ export {
   type MigrateOpts,
 } from './migrate'
 export { VERSION } from './version'
+export { materinHome, PROVIDER_PRESETS, loadConfig, saveConfig, applyConfigToEnv, configuredProviders, type MaterinConfig, type ProviderPreset } from './config'
+export { ensureModelConfigured, runOnboarding, type OnboardResult, type OnboardingIo } from './onboarding'

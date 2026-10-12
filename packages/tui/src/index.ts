@@ -97,11 +97,28 @@ async function oneShot(base: string, prompt: string, sessionArg?: string): Promi
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
+  // -d <dir> 数据根目录 (默认 ~/.materin); 必须在 openDb 之前设置
+  const dIdx = args.indexOf('-d')
+  if (dIdx >= 0 && args[dIdx + 1]) process.env.MATERIN_HOME = args[dIdx + 1]!
+
   if (args.includes('--version')) {
     const { VERSION } = await import('@materin/core')
     console.log('materin ' + VERSION)
     process.exit(0)
   }
+
+  const core = await import('@materin/core')
+
+  if (args[0] === 'config') {
+    const result = await core.runOnboarding(core.materinHome(), null)
+    process.exit(result.configured ? 0 : 1)
+  }
+
+  // 首次启动: 未检测到任何模型 key 时交互式引导 (Claude Code/pi 同款逻辑)
+  const onboard = await core.ensureModelConfigured()
+  if (!onboard.configured) process.exit(1)
+  if (!process.env.MATERIN_MODEL) process.env.MATERIN_MODEL = onboard.defaultModel
+
   if (args[0] === 'init' || args.includes('--init')) {
     const force = args.includes('--force')
     const { migrateImportSkills } = await import('@materin/core')
@@ -126,7 +143,9 @@ async function main(): Promise<void> {
     return
   }
 
-  const sessions = (await api(base, '/session')) as Array<{ id: string }>
+  // 按当前项目恢复会话 (不跨项目误恢复), 无则新建
+  const { projectIdForCwd } = await import('@materin/core')
+  const sessions = (await api(base, '/session?projectId=' + encodeURIComponent(projectIdForCwd(process.cwd())))) as Array<{ id: string }>
   let sessionId = sessions[0]?.id
   if (args.includes('--new')) sessionId = undefined
   if (!sessionId) {
@@ -137,32 +156,51 @@ async function main(): Promise<void> {
     sessionId = created.id
   }
 
-  console.log('\x1b[2m[materin] session ' + sessionId + '\x1b[0m')
+  console.log('\x1b[2m[materin] session ' + sessionId + ' — /exit 退出, Ctrl+C 中止任务/退出\x1b[0m')
   connectSse(base, (data) => {
     try {
+      const ev = JSON.parse(data) as { type: string }
+      if (ev.type === 'agent_end' || ev.type === 'agent_error') running = false
       renderEvent(JSON.parse(data))
     } catch {}
   })
 
   const readline = await import('node:readline')
-  const rl = readline.createInterface({ input: process.stdin })
-  rl.setPrompt('> ')
-  rl.prompt()
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: true,
+    prompt: '> ',
+  })
+  rl.prompt(true)
+
+  let running = false
 
   rl.on('line', (line: string) => {
     const text = line.trim()
-    if (!text) return
+    if (!text) {
+      rl.prompt()
+      return
+    }
     if (text === '/exit') process.exit(0)
+    running = true
     api(base, '/session/' + sessionId + '/prompt', {
       method: 'POST',
       body: JSON.stringify({ text: text }),
     }).catch((e: unknown) => {
+      running = false
       console.error('error: ' + (e instanceof Error ? e.message : String(e)))
+      rl.prompt()
     })
   })
 
   process.on('SIGINT', () => {
-    void api(base, '/session/' + sessionId + '/abort', { method: 'POST' })
+    if (running) {
+      void api(base, '/session/' + sessionId + '/abort', { method: 'POST' })
+      console.log('\n\x1b[2m[aborting...]\x1b[0m')
+    } else {
+      process.exit(0)
+    }
   })
 
   setInterval(() => {}, 60_000)

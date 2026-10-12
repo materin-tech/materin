@@ -1,7 +1,7 @@
 import { Database } from 'bun:sqlite'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
+import { materinHome } from '../config'
 
 /**
  * SQLite schema migrations (Hermes 范式: schema_version 表记录迁移链).
@@ -106,7 +106,7 @@ ALTER TABLE session ADD COLUMN thinking_level TEXT NOT NULL DEFAULT 'off';
 const MIGRATIONS: string[] = [MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4]
 
 export function defaultDbPath(): string {
-  return join(homedir(), '.materin', 'state.db')
+  return join(materinHome(), 'state.db')
 }
 
 export function openDb(path: string = defaultDbPath()): Database {

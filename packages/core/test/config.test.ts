@@ -49,7 +49,7 @@ describe('config', () => {
 
   test('onboarding: 无 key 时引导选择并写入 config', async () => {
     const home = makeHome()
-    for (const k of ['ANTHROPIC_API_KEY', 'DEEPSEEK_API_KEY', 'DASHSCOPE_API_KEY', 'MOONSHOT_API_KEY', 'ZAI_API_KEY', 'OPENAI_API_KEY']) {
+    for (const k of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'DEEPSEEK_API_KEY', 'DASHSCOPE_API_KEY', 'MOONSHOT_API_KEY', 'ZAI_API_KEY', 'OPENAI_API_KEY']) {
       delete process.env[k]
     }
     const log: string[] = []
@@ -79,7 +79,7 @@ describe('config', () => {
 
   test('onboarding: 无效选择不写配置', async () => {
     const home = makeHome()
-    for (const k of ['ANTHROPIC_API_KEY', 'DEEPSEEK_API_KEY', 'DASHSCOPE_API_KEY', 'MOONSHOT_API_KEY', 'ZAI_API_KEY', 'OPENAI_API_KEY']) {
+    for (const k of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'DEEPSEEK_API_KEY', 'DASHSCOPE_API_KEY', 'MOONSHOT_API_KEY', 'ZAI_API_KEY', 'OPENAI_API_KEY']) {
       delete process.env[k]
     }
     const io: OnboardingIo = { log: () => {}, ask: () => Promise.resolve('99') }

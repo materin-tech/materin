@@ -8,6 +8,7 @@ import {
   Bus,
   AgentSession,
   createDefaultTools,
+  MemoryStore,
   PermissionManager,
   parsePermissionRules,
   type AgentEvent,
@@ -54,6 +55,7 @@ export interface TestServer {
   setProvider(p: Provider): void
   get(path: string): Promise<Response>
   post(path: string, body?: unknown): Promise<Response>
+  del(path: string): Promise<Response>
   stop(): void
 }
 
@@ -77,6 +79,7 @@ export function startTestServer(): TestServer {
       }),
     resolveProvider: () => ({ provider: current, api: 'anthropic' as const }),
     answerPermission: () => false,
+    getMemory: () => new MemoryStore(mkdtempSync(join(tmpdir(), 'materin-mem-'))),
   })
 
   const server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: app.fetch, idleTimeout: 255 })
@@ -98,6 +101,9 @@ export function startTestServer(): TestServer {
         headers: { 'content-type': 'application/json' },
         body: body === undefined ? undefined : JSON.stringify(body),
       })
+    },
+    async del(path: string): Promise<Response> {
+      return fetch(base + path, { method: 'DELETE' })
     },
     stop(): void {
       server.stop(true)

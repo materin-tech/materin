@@ -28,6 +28,26 @@ Web 端支持: 会话管理、剪贴板粘贴图片提问、`@文件` 引用、`
 | `ANTHROPIC_API_KEY` | 必需 |
 | `ANTHROPIC_BASE_URL` | 可选, 中转/代理地址 |
 | `MATERIN_MODEL` | 默认 `claude-sonnet-5-5` |
+| `MATERIN_THINKING` | 新会话默认思考深度 off/low/medium/high/xhigh |
+| `MATERIN_MODE` | 新会话默认审批模式 plan/manual/auto/passon |
+| `MATERIN_HOME` | 数据根目录（或 `-d <dir>`） |
+| `MATERIN_PERMISSIONS` | 权限规则（如 "bash:deny;edit:ask"） |
+| `MATERIN_SUBAGENT_DEPTH` | 子代理深度上限（默认 1） |
+| `MATERIN_REFLECTION` | `=1` 开启反思层（配 `MATERIN_REFLECTION_MODEL`） |
+
+### Docker 部署（全部配置走环境变量）
+
+```bash
+docker build -t materin .
+docker run -d -p 4128:4128 -v materin-data:/data \
+  -e ANTHROPIC_BASE_URL=https://api.minimaxi.com/anthropic \
+  -e ANTHROPIC_AUTH_TOKEN=<你的key> \
+  -e MATERIN_MODEL="MiniMax-M3[1m]" \
+  -e MATERIN_WIRE_API=anthropic \
+  -e MATERIN_MODE=passon \
+  materin
+# GUI: http://<host>:4128/ui/
+```
 
 ## 命令
 

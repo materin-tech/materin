@@ -126,6 +126,19 @@ export class AgentSession {
           }
         }
 
+        // 防御: 部分 Anthropic 兼容端点 (如 MiniMax) 缺发 content_block_stop,
+        // 工具参数停留在原始字符串 — 流结束后强制 finalize
+        for (const block of accum.content) {
+          if (block.type === 'toolCall' && typeof block.arguments === 'string') {
+            const raw = block.arguments
+            try {
+              block.arguments = raw.trim() ? JSON.parse(raw) : {}
+            } catch {
+              block.arguments = { __invalid_json: raw }
+            }
+          }
+        }
+
         if (accum.usage) store.addSessionUsage(sid, accum.usage, model)
         const assistantRow = store.appendMessage(
           sid,

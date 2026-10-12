@@ -2,11 +2,24 @@ import { join, dirname } from 'node:path'
 import { existsSync } from 'node:fs'
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
-import { compact, parseInput, listFiles, normalizeMode, type ResolveProvider } from '@materin/core'
+import {
+  compact,
+  normalizeMode,
+  parseInput,
+  listFiles,
+  loadConfig,
+  saveConfig,
+  applyConfigToEnv,
+  PROVIDER_PRESETS,
+  type MaterinConfig,
+  type ResolveProvider,
+  type MemoryStore,
+} from '@materin/core'
 import type { AgentEvent, AgentSession, Bus, LoadedExtensions, SessionStore } from '@materin/core'
 import { listAvailableModels, normalizeThinking, resolveModel } from '@materin/ai'
 import type { ImageBlock } from '@materin/ai'
 import { openApiSpec } from './openapi'
+import { buildCommandRegistry, type CommandRegistry } from './commands'
 
 /**
  * Server-first architecture: all state flows over HTTP + SSE.
@@ -21,12 +34,19 @@ export interface ServerDeps {
   getExtensions?: () => LoadedExtensions | undefined
   reloadExtensions?: () => Promise<void>
   reflect?: (sessionId: string) => Promise<void>
+  getMemory?: (sessionId: string) => MemoryStore
 }
 
 export function createApp(deps: ServerDeps): Hono {
   const { store, bus, createAgent, resolveProvider, answerPermission } = deps
   const app = new Hono()
   const running = new Map<string, AbortController>()
+  const registry: CommandRegistry = buildCommandRegistry({
+    store: store,
+    resolveProvider: resolveProvider,
+    getMemory: deps.getMemory,
+    getExtensions: deps.getExtensions,
+  })
 
   app.get('/', (c) => c.json({ name: 'materin-server', version: '0.1.0' }))
   app.get('/openapi.json', (c) => c.json(openApiSpec()))
@@ -34,12 +54,17 @@ export function createApp(deps: ServerDeps): Hono {
   app.get('/ui/*', (c) => serveUi(new URL(c.req.url).pathname))
 
   app.post('/session', async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as { cwd?: string; model?: string }
+    const body = (await c.req.json().catch(() => ({}))) as { cwd?: string; model?: string; thinkingLevel?: string; permissionMode?: string }
     const session = store.createSession({
       cwd: body.cwd ?? process.cwd(),
       model: body.model ?? process.env.MATERIN_MODEL ?? 'claude-sonnet-5-5',
     })
-    return c.json(session, 201)
+    // 环境变量兜底新会话默认值 (Docker/云端部署用)
+    const thinking = body.thinkingLevel ?? process.env.MATERIN_THINKING
+    if (thinking) store.setThinkingLevel(session.id, normalizeThinking(thinking))
+    const mode = body.permissionMode ?? process.env.MATERIN_MODE
+    if (mode) store.setPermissionMode(session.id, normalizeMode(mode))
+    return c.json(store.getSession(session.id) ?? session, 201)
   })
 
   app.get('/session', (c) => {
@@ -50,6 +75,38 @@ export function createApp(deps: ServerDeps): Hono {
   app.get('/session/:id', (c) => {
     const session = store.getSession(c.req.param('id'))
     return session ? c.json(session) : c.json({ error: 'not found' }, 404)
+  })
+
+  app.delete('/session/:id', (c) => {
+    const deleted = store.deleteSession(c.req.param('id'))
+    return deleted ? c.json({ ok: true }) : c.json({ error: 'not found' }, 404)
+  })
+
+  app.get('/config', (c) => c.json(maskedConfigView()))
+
+  app.post('/config', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as {
+      defaultModel?: string
+      providers?: Record<string, { apiKey?: string; baseUrl?: string }>
+    }
+    const current = loadConfig() ?? {}
+    const providers: Record<string, { apiKey?: string; baseUrl?: string }> = { ...current.providers }
+    for (const [id, entry] of Object.entries(body.providers ?? {})) {
+      if (!PROVIDER_PRESETS.some((p) => p.id === id)) continue
+      const prev = providers[id] ?? {}
+      providers[id] = {
+        ...(entry.apiKey ? { apiKey: entry.apiKey } : prev.apiKey ? { apiKey: prev.apiKey } : {}),
+        ...(entry.baseUrl ? { baseUrl: entry.baseUrl } : prev.baseUrl ? { baseUrl: prev.baseUrl } : {}),
+      }
+    }
+    const next: MaterinConfig = {
+      ...current,
+      ...(body.defaultModel ? { defaultModel: body.defaultModel.trim() } : {}),
+      providers: providers,
+    }
+    saveConfig(next)
+    applyConfigToEnv(next)
+    return c.json(maskedConfigView())
   })
 
   app.get('/session/:id/messages', (c) => {
@@ -148,72 +205,9 @@ export function createApp(deps: ServerDeps): Hono {
         return c.json({ command: true, output: 'extension command failed: ' + message, error: message })
       }
     }
-    if (command.name === '/compact') {
-      const session = store.getSession(sessionId)
-      if (!session) return c.json({ error: 'not found' }, 404)
-      const model = session.model ?? 'claude-sonnet-5-5'
-      try {
-        const result = await compact(store, resolveProvider, model, sessionId)
-        if (result === null) return c.json({ command: true, error: 'nothing to compact' }, 400)
-        return c.json({ command: true, summary: result.summary, tokensBefore: result.tokensBefore })
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e)
-        return c.json({ command: true, error: message }, 502)
-      }
-    }
-    if (command.name === '/model') {
-      if (!command.arg) return c.json({ command: true, models: listAvailableModels() })
-      const resolved = resolveModel(command.arg)
-      store.setSessionModel(sessionId, resolved.id)
-      return c.json({ command: true, model: resolved.id })
-    }
-    if (command.name === '/thinking') {
-      const session = store.getSession(sessionId)
-      if (!session) return c.json({ error: 'not found' }, 404)
-      const raw = command.arg?.trim()
-      if (!raw) {
-        return c.json({ command: true, output: 'usage: /thinking <off|low|medium|high|xhigh>' })
-      }
-      const level = normalizeThinking(raw)
-      if (level === 'off' && raw.toLowerCase() !== 'off') {
-        return c.json({
-          command: true,
-          output: 'usage: /thinking <off|low|medium|high|xhigh> (got: ' + raw + ')',
-          error: 'invalid thinking level',
-        })
-      }
-      store.setThinkingLevel(sessionId, level)
-      const updated = store.getSession(sessionId)
-      return c.json({ command: true, thinkingLevel: level, session: updated })
-    }
-    if (command.name === '/mode') {
-      const session = store.getSession(sessionId)
-      if (!session) return c.json({ error: 'not found' }, 404)
-      const raw = command.arg?.trim()
-      if (!raw) {
-        return c.json({ command: true, output: 'usage: /mode <plan|manual|auto|passon> (current: ' + session.permissionMode + ')' })
-      }
-      const mode = normalizeMode(raw)
-      if (mode === 'manual' && raw.toLowerCase() !== 'manual') {
-        return c.json({ command: true, output: 'usage: /mode <plan|manual|auto|passon> (got: ' + raw + ')', error: 'invalid mode' })
-      }
-      store.setPermissionMode(sessionId, mode)
-      return c.json({ command: true, output: 'mode: ' + mode, session: store.getSession(sessionId) })
-    }
-    if (command.name === '/plan' || command.name === '/passon') {
-      const session = store.getSession(sessionId)
-      if (!session) return c.json({ error: 'not found' }, 404)
-      const mode = command.name === '/plan' ? 'plan' : 'passon'
-      store.setPermissionMode(sessionId, mode)
-      return c.json({ command: true, output: 'mode: ' + mode })
-    }
-    if (command.name === '/new') {
-      const session = store.getSession(sessionId)
-      const created = store.createSession({ cwd: session?.cwd ?? process.cwd(), model: session?.model ?? 'claude-sonnet-5-5' })
-      return c.json({ command: true, sessionId: created.id }, 201)
-    }
-    if (command.name === '/exit') return c.json({ command: true, error: 'exit is handled by the client' }, 400)
-    return c.json({ command: true, error: 'unknown command: ' + command.name }, 400)
+    const entry = registry.get(command.name)
+    if (!entry) return c.json({ command: true, error: 'unknown command: ' + command.name }, 400)
+    return entry.run(c, sessionId, command.arg)
   }
 
   app.post('/session/:id/abort', (c) => {
@@ -335,6 +329,24 @@ function validateImages(images: unknown): ImageBlock[] | string {
     cleaned.push({ type: 'image', mimeType: img.mimeType, data: data })
   }
   return cleaned
+}
+
+/** Masked config view for the GUI: hasKey flags only — API keys are never returned. */
+function maskedConfigView(): { defaultModel: string | null; providers: Record<string, { hasKey: boolean; baseUrl?: string }> } {
+  const cfg = loadConfig()
+  const providers: Record<string, { hasKey: boolean; baseUrl?: string }> = {}
+  for (const preset of PROVIDER_PRESETS) {
+    const entry = cfg?.providers?.[preset.id]
+    const hasKey =
+      Boolean(process.env[preset.apiKeyEnv]) ||
+      (preset.id === 'anthropic' && Boolean(process.env.ANTHROPIC_AUTH_TOKEN)) ||
+      Boolean(entry?.apiKey)
+    providers[preset.id] = {
+      hasKey: hasKey,
+      ...(entry?.baseUrl ? { baseUrl: entry.baseUrl } : {}),
+    }
+  }
+  return { defaultModel: cfg?.defaultModel ?? process.env.MATERIN_MODEL ?? null, providers: providers }
 }
 
 const WEB_CONTENT_TYPES: Record<string, string> = {

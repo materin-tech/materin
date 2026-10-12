@@ -242,6 +242,35 @@ async function main(): Promise<void> {
 
   let running = false
 
+  /** Slash commands: await the JSON response and render output/models locally. */
+  async function runCommand(text: string): Promise<void> {
+    running = true
+    try {
+      const res = await fetch(base + '/session/' + sessionId + '/prompt', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: text }),
+      })
+      const body = (await res.json().catch(() => ({}))) as {
+        output?: string
+        models?: Array<{ id: string; label?: string }>
+        sessionId?: string
+        error?: string
+      }
+      if (body.output) console.log(body.output)
+      else if (Array.isArray(body.models)) {
+        for (const m of body.models) console.log(m.id + (m.label ? '  ' + m.label : ''))
+      } else if (body.error) console.log('\x1b[31m' + body.error + '\x1b[0m')
+      else if (body.sessionId) console.log('[session] ' + body.sessionId)
+      if (body.sessionId) sessionId = body.sessionId
+    } catch (e) {
+      console.error('error: ' + (e instanceof Error ? e.message : String(e)))
+    } finally {
+      running = false
+      rl.prompt(true)
+    }
+  }
+
   rl.on('line', (line: string) => {
     const text = line.trim()
     if (!text) {
@@ -249,6 +278,10 @@ async function main(): Promise<void> {
       return
     }
     if (text === '/exit') process.exit(0)
+    if (text.startsWith('/')) {
+      void runCommand(text)
+      return
+    }
     running = true
     api(base, '/session/' + sessionId + '/prompt', {
       method: 'POST',

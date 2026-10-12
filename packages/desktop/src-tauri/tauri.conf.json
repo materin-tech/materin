@@ -4,18 +4,22 @@
   "version": "0.1.0",
   "identifier": "dev.materin.desktop",
   "build": {
-    "frontendDist": "../web/dist"
+    "frontendDist": "../web-dist-placeholder"
   },
   "app": {
     "windows": [
       {
         "title": "materin",
-        "width": 1200,
-        "height": 800
+        "width": 1280,
+        "height": 820,
+        "visible": true
       }
     ],
     "security": {
       "csp": null
     }
+  },
+  "bundle": {
+    "targets": ["app"]
   }
 }

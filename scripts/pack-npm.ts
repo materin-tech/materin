@@ -6,10 +6,11 @@
  * 产物: release/<ver>/npm/*.tgz
  */
 import { $ } from 'bun'
+import { readFileSync } from 'node:fs'
 import { mkdirSync, cpSync, rmSync, writeFileSync, chmodSync, existsSync, copyFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const VERSION = '0.1.0'
+const VERSION = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf-8')) as { version: string }).version
 const ROOT = new URL('..', import.meta.url).pathname
 const OUT = join(ROOT, 'release', 'v' + VERSION, 'npm')
 const TMP = join(ROOT, '.npm-tmp')

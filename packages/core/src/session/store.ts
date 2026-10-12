@@ -216,6 +216,30 @@ export class SessionStore {
     this.setLeaf(sessionId, messageId)
   }
 
+  /**
+   * Delete a session and all dependent rows (messages, FTS index, compaction,
+   * usage, locks, gateway routing). Returns false when the session is unknown.
+   */
+  deleteSession(id: string): boolean {
+    const session = this.getSession(id)
+    if (!session) return false
+    const msgRowids = this.db
+      .query('SELECT rowid FROM message WHERE session_id = ?')
+      .all(id) as Array<{ rowid: number }>
+    for (const table of ['fts_default', 'fts_trigram']) {
+      for (const { rowid } of msgRowids) {
+        this.db.query('DELETE FROM ' + table + ' WHERE rowid = ?').run(rowid)
+      }
+    }
+    this.db.query('DELETE FROM message WHERE session_id = ?').run(id)
+    this.db.query('DELETE FROM compaction WHERE session_id = ?').run(id)
+    this.db.query('DELETE FROM model_usage WHERE session_id = ?').run(id)
+    this.db.query('DELETE FROM compression_locks WHERE session_id = ?').run(id)
+    this.db.query('DELETE FROM gateway_routing WHERE session_id = ?').run(id)
+    this.db.query('DELETE FROM session WHERE id = ?').run(id)
+    return true
+  }
+
   setSessionModel(sessionId: string, model: string): void {
     this.db.query('UPDATE session SET model = ? WHERE id = ?').run(model, sessionId)
   }

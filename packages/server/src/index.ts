@@ -126,6 +126,7 @@ const app = createApp({
   resolveProvider: resolveProvider,
   answerPermission: answerPermission,
   getExtensions: () => extensionsHolder.current,
+  getMemory: getMemoryStore,
   reloadExtensions: reloadExtensions,
   reflect: async (sessionId) => {
     if (process.env.MATERIN_REFLECTION !== '1') return

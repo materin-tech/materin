@@ -1,0 +1,11 @@
+node_modules
+dist
+release
+*.db
+*.db-wal
+*.db-shm
+.env
+.DS_Store
+openspec
+docs/images
+.claude

@@ -1,0 +1,108 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            bun_target: bun-darwin-arm64
+          - os: windows-latest
+            bun_target: bun-windows-x64
+          - os: ubuntu-22.04
+            bun_target: bun-linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install Linux system deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build web GUI
+        run: bun run web:build
+
+      - name: Compile server binary
+        shell: bash
+        run: |
+          mkdir -p packages/desktop/src-tauri/binaries/web
+          bun build --compile --target=${{ matrix.bun_target }} packages/server/src/index.ts --outfile packages/desktop/src-tauri/binaries/materin-server
+          cp packages/web/dist/index.html packages/web/dist/main.js packages/desktop/src-tauri/binaries/web/
+
+      # Windows: the Tauri bundler expects the sidecar next to the exe; we inject
+      # after the app-only bundle the same way the macOS build script does.
+      - name: Tauri build
+        working-directory: packages/desktop
+        shell: bash
+        run: bunx @tauri-apps/cli build --bundles app
+
+      - name: Package macOS (inject + dmg)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          APP="packages/desktop/src-tauri/target/release/bundle/macos/materin.app"
+          cp packages/desktop/src-tauri/binaries/materin-server "$APP/Contents/MacOS/materin-server"
+          mkdir -p "$APP/Contents/MacOS/web"
+          cp packages/desktop/src-tauri/binaries/web/index.html packages/desktop/src-tauri/binaries/web/main.js "$APP/Contents/MacOS/web/"
+          STAGING=$(mktemp -d)
+          cp -R "$APP" "$STAGING/"
+          mkdir -p release
+          hdiutil create -volname "materin" -srcfolder "$STAGING" -ov -format UDZO "release/materin-desktop.dmg"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exe = "packages/desktop/src-tauri/target/release/materin-desktop.exe"
+          $dir = "packages/desktop/src-tauri/target/release"
+          Copy-Item packages/desktop/src-tauri/binaries/materin-server.exe "$dir/materin-server.exe"
+          New-Item -ItemType Directory -Force "$dir/web" | Out-Null
+          Copy-Item packages/desktop/src-tauri/binaries/web/* "$dir/web/"
+          Compress-Archive -Path $exe, "$dir/materin-server.exe", "$dir/web" -DestinationPath release/materin-desktop-windows.zip
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          DIR="packages/desktop/src-tauri/target/release"
+          cp packages/desktop/src-tauri/binaries/materin-server "$DIR/materin-server"
+          mkdir -p "$DIR/web"
+          cp packages/desktop/src-tauri/binaries/web/* "$DIR/web/"
+          mkdir -p release
+          tar czf release/materin-desktop-linux.tar.gz -C "$DIR" materin-desktop materin-server web
+
+      - name: Upload macOS artifacts
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: materin-desktop-macos
+          path: |
+            release/materin-desktop.dmg
+            packages/desktop/src-tauri/target/release/bundle/macos/materin.app
+
+      - name: Upload Windows artifacts
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: materin-desktop-windows
+          path: release/materin-desktop-windows.zip
+
+      - name: Upload Linux artifacts
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: materin-desktop-linux
+          path: release/materin-desktop-linux.tar.gz

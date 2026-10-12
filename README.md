@@ -87,7 +87,19 @@ bun install && bun run dev
 配置存于 `~/.materin/config.json` (0600), 也可全部用环境变量覆盖 (`materin config` 重配,
 `-d <dir>` 指定数据根目录)。
 
-## 渠道机器人（钉钉/飞书/企业微信）
+## 渠道机器人
+
+**默认后台运行** (daemon): `materin-gateway` 无参数即后台启动。
+
+```bash
+materin-gateway                 # 后台启动 (需已配置模型 + 至少一个渠道)
+materin-gateway fg              # 前台运行 (调试)
+materin-gateway status|logs [-f]|stop|restart
+materin-gateway install-service # 开机自启: macOS launchd / Linux systemd (用户级)
+materin-gateway uninstall-service
+```
+
+PID 与日志在数据根目录 (gateway.pid / gateway.log)。启动校验: 模型配置 + 至少一个渠道。（钉钉/飞书/企业微信）
 
 ```bash
 bun run gateway   # 按 env 注册适配器

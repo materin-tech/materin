@@ -69,6 +69,7 @@ export function applyConfigToEnv(cfg: MaterinConfig | null): void {
 export function configuredProviders(cfg: MaterinConfig | null): ProviderPreset[] {
   return PROVIDER_PRESETS.filter((p) => {
     if (process.env[p.apiKeyEnv]) return true
+    if (p.id === 'anthropic' && process.env.ANTHROPIC_AUTH_TOKEN) return true
     return Boolean(cfg?.providers?.[p.id]?.apiKey)
   })
 }

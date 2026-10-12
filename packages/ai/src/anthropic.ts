@@ -15,11 +15,12 @@ interface ProviderOptions {
  */
 export function createAnthropicProvider(opts: ProviderOptions = {}): Provider {
   const apiKey = opts.apiKey ?? process.env.ANTHROPIC_API_KEY ?? ''
+  const authToken = process.env.ANTHROPIC_AUTH_TOKEN ?? ''
   const baseUrl = (opts.baseUrl ?? process.env.ANTHROPIC_BASE_URL ?? 'https://api.anthropic.com').replace(/\/$/, '')
 
   async function* stream(ctx: StreamContext): AsyncIterable<StreamEvent> {
-    if (!apiKey) {
-      yield { type: 'error', error: new Error('ANTHROPIC_API_KEY is not set') }
+    if (!apiKey && !authToken) {
+      yield { type: 'error', error: new Error('ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN is not set') }
       return
     }
 
@@ -45,7 +46,7 @@ export function createAnthropicProvider(opts: ProviderOptions = {}): Provider {
       res = await fetch(`${baseUrl}/v1/messages`, {
         method: 'POST',
         headers: {
-          'x-api-key': apiKey,
+          ...(authToken ? { authorization: 'Bearer ' + authToken } : { 'x-api-key': apiKey }),
           'anthropic-version': ANTHROPIC_VERSION,
           'content-type': 'application/json',
         },

@@ -1,7 +1,8 @@
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
+import { existsSync } from 'node:fs'
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
-import { compact, parseInput, type ResolveProvider } from '@materin/core'
+import { compact, parseInput, listFiles, normalizeMode, type ResolveProvider } from '@materin/core'
 import type { AgentEvent, AgentSession, Bus, LoadedExtensions, SessionStore } from '@materin/core'
 import { listAvailableModels, normalizeThinking, resolveModel } from '@materin/ai'
 import type { ImageBlock } from '@materin/ai'
@@ -185,6 +186,27 @@ export function createApp(deps: ServerDeps): Hono {
       const updated = store.getSession(sessionId)
       return c.json({ command: true, thinkingLevel: level, session: updated })
     }
+    if (command.name === '/mode') {
+      const session = store.getSession(sessionId)
+      if (!session) return c.json({ error: 'not found' }, 404)
+      const raw = command.arg?.trim()
+      if (!raw) {
+        return c.json({ command: true, output: 'usage: /mode <plan|manual|auto|passon> (current: ' + session.permissionMode + ')' })
+      }
+      const mode = normalizeMode(raw)
+      if (mode === 'manual' && raw.toLowerCase() !== 'manual') {
+        return c.json({ command: true, output: 'usage: /mode <plan|manual|auto|passon> (got: ' + raw + ')', error: 'invalid mode' })
+      }
+      store.setPermissionMode(sessionId, mode)
+      return c.json({ command: true, output: 'mode: ' + mode, session: store.getSession(sessionId) })
+    }
+    if (command.name === '/plan' || command.name === '/passon') {
+      const session = store.getSession(sessionId)
+      if (!session) return c.json({ error: 'not found' }, 404)
+      const mode = command.name === '/plan' ? 'plan' : 'passon'
+      store.setPermissionMode(sessionId, mode)
+      return c.json({ command: true, output: 'mode: ' + mode })
+    }
     if (command.name === '/new') {
       const session = store.getSession(sessionId)
       const created = store.createSession({ cwd: session?.cwd ?? process.cwd(), model: session?.model ?? 'claude-sonnet-5-5' })
@@ -237,6 +259,24 @@ export function createApp(deps: ServerDeps): Hono {
     store.setThinkingLevel(sessionId, level)
     const updated = store.getSession(sessionId)
     return updated ? c.json(updated) : c.json({ error: 'not found' }, 404)
+  })
+
+  app.post('/session/:id/mode', async (c) => {
+    const sessionId = c.req.param('id')
+    if (!store.getSession(sessionId)) return c.json({ error: 'not found' }, 404)
+    const body = (await c.req.json().catch(() => ({}))) as { mode?: string }
+    if (!body.mode || body.mode.trim().length === 0) return c.json({ error: 'mode is required' }, 400)
+    const mode = normalizeMode(body.mode)
+    store.setPermissionMode(sessionId, mode)
+    const updated = store.getSession(sessionId)
+    return updated ? c.json(updated) : c.json({ error: 'not found' }, 404)
+  })
+
+  app.get('/session/:id/files', (c) => {
+    const session = store.getSession(c.req.param('id'))
+    if (!session) return c.json({ error: 'not found' }, 404)
+    const q = c.req.query('q') ?? ''
+    return c.json({ files: listFiles(session.cwd ?? process.cwd(), q) })
   })
 
   app.get('/models', (c) => c.json(listAvailableModels()))
@@ -305,7 +345,13 @@ const WEB_CONTENT_TYPES: Record<string, string> = {
 
 /** Serve the built web SPA (packages/web/dist). Only a couple of files — no serveStatic needed. */
 export function serveUi(path: string): Response {
-  const webRoot = process.env.MATERIN_WEB_ROOT ?? join(import.meta.dir, '../../web/dist')
+  // 解析顺序: MATERIN_WEB_ROOT > 二进制旁路 web/ (发布包形态) > 源码仓相对路径 (dev)
+  let webRoot = process.env.MATERIN_WEB_ROOT ?? ''
+  if (!webRoot) {
+    const besideBinary = join(dirname(process.execPath), 'web')
+    if (existsSync(join(besideBinary, 'index.html'))) webRoot = besideBinary
+  }
+  if (!webRoot) webRoot = join(import.meta.dir, '../../web/dist')
   const rel = path.replace(/^\/ui\/?/, '')
   const relFile = rel.length === 0 || rel.endsWith('/') ? 'index.html' : rel
   const base = join(webRoot, relFile)

@@ -88,6 +88,12 @@ async function main(): Promise<void> {
         copyFileSync(join(ROOT, 'dist', bin), join(dir, 'bin', bin))
         chmodSync(join(dir, 'bin', bin), 0o755)
       }
+      const webDist = join(ROOT, 'packages', 'web', 'dist')
+      if (existsSync(join(webDist, 'index.html'))) {
+        mkdirSync(join(dir, 'bin', 'web'), { recursive: true })
+        copyFileSync(join(webDist, 'index.html'), join(dir, 'bin', 'web', 'index.html'))
+        copyFileSync(join(webDist, 'main.js'), join(dir, 'bin', 'web', 'main.js'))
+      }
     } else {
       writeFileSync(join(dir, 'bin', '.placeholder'), 'build on ' + platform + ' via bun run compile:*')
     }

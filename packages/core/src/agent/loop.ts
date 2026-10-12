@@ -10,6 +10,7 @@ import { collectRules } from '../rules'
 import { discoverSkills, buildSkillsListing } from '../skills'
 import { compact, type ResolveProvider } from './compaction'
 import { SYSTEM_PROMPT } from './system-prompt'
+import { normalizeMode, resolveToolDecision } from './modes'
 import { applyStreamEvent, asUpdateDelta, createAccumState } from './stream-accum'
 
 /**
@@ -249,9 +250,14 @@ export class AgentSession {
     const perms = this.deps.permissions
     if (!perms) return null
     perms.record(call.name, call.arguments)
-    const decision = perms.check(call.name, call.arguments)
-    if (decision === 'allow') return null
-    if (decision === 'deny') return blockedResult('blocked by permission rule')
+    const ruleDecision = perms.check(call.name, call.arguments)
+    const sessionNow = this.deps.store.getSession(this.sessionId)
+    const mode = normalizeMode(sessionNow?.permissionMode)
+    const final = resolveToolDecision(mode, call.name, ruleDecision)
+    if (final === 'allow') return null
+    if (final === 'deny') {
+      return blockedResult(mode === 'plan' && (call.name === 'edit' || call.name === 'write') ? 'plan mode is read-only' : 'blocked by permission rule')
+    }
     const ask = this.deps.onPermissionAsk
     if (!ask) return blockedResult('blocked by permission rule')
     const allowed = await ask(this.sessionId, call.name, call.arguments)

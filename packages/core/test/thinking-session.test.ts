@@ -4,10 +4,10 @@ import { SessionStore } from '../src/session/store'
 import { normalizeThinking } from '@materin/ai'
 
 describe('thinking_level persistence', () => {
-  test('migration v4 applied: schema_version 4, sessions default to off', () => {
+  test('migration v5 applied: schema_version 5, sessions default to off', () => {
     const db = openDb(':memory:')
     const version = db.query('SELECT MAX(version) AS v FROM schema_version').get() as { v: number }
-    expect(version.v).toBe(4)
+    expect(version.v).toBe(5)
     const store = new SessionStore(db)
     const session = store.createSession({ cwd: '/tmp/x', model: 'm' })
     expect(session.thinkingLevel).toBe('off')

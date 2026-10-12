@@ -1,6 +1,8 @@
 import type { Database } from 'bun:sqlite'
 import { randomUUID } from 'node:crypto'
 import type { AssistantContentBlock, AssistantMessage, Message, ToolResultBlock, UserContentBlock, Usage } from '@materin/ai'
+import type { PermissionMode } from '../agent/modes'
+import { normalizeMode } from '../agent/modes'
 import { ftsIndexMessage, extractPlainText, searchMessages, type SearchHit } from './search'
 
 /**
@@ -16,6 +18,7 @@ export interface SessionRow {
   leafId: string | null
   model: string | null
   thinkingLevel: string
+  permissionMode: PermissionMode
   cwd: string | null
   source: string
   archived: boolean
@@ -66,6 +69,7 @@ interface RawSessionRow {
   leaf_id: string | null
   model: string | null
   thinking_level: string
+  permission_mode: string
   cwd: string | null
   source: string
   archived: number
@@ -218,6 +222,10 @@ export class SessionStore {
 
   setThinkingLevel(sessionId: string, level: string): void {
     this.db.query('UPDATE session SET thinking_level = ? WHERE id = ?').run(level, sessionId)
+  }
+
+  setPermissionMode(sessionId: string, mode: PermissionMode): void {
+    this.db.query('UPDATE session SET permission_mode = ? WHERE id = ?').run(mode, sessionId)
   }
 
   addSessionUsage(sessionId: string, usage: Usage, model: string): void {
@@ -402,6 +410,7 @@ function mapSession(row: RawSessionRow): SessionRow {
     leafId: row.leaf_id,
     model: row.model,
     thinkingLevel: row.thinking_level ?? 'off',
+    permissionMode: normalizeMode(row.permission_mode),
     cwd: row.cwd,
     source: row.source,
     archived: row.archived === 1,

@@ -122,6 +122,9 @@ export function resolveModel(model: string): ResolvedModel {
 /** 未知模型: 按前缀猜, 兜底 openai-completions + OPENAI_API_KEY */
 function fallbackInfo(model: string): ModelInfo {
   if (model.startsWith('claude')) return { ...DEFAULT_ANTHROPIC, contextWindow: 200_000 }
+  if (process.env.MATERIN_WIRE_API === 'anthropic') {
+    return { ...DEFAULT_ANTHROPIC, contextWindow: Number(process.env.MATERIN_CONTEXT_WINDOW ?? '200000') }
+  }
   return {
     api: 'openai-completions',
     apiKeyEnv: 'OPENAI_API_KEY',

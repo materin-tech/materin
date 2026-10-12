@@ -103,7 +103,12 @@ const MIGRATION_V4 = `
 ALTER TABLE session ADD COLUMN thinking_level TEXT NOT NULL DEFAULT 'off';
 `
 
-const MIGRATIONS: string[] = [MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4]
+/// v5 — 审批模式: session 级权限模式 ('plan'|'manual'|'auto'|'passon').
+const MIGRATION_V5 = `
+ALTER TABLE session ADD COLUMN permission_mode TEXT NOT NULL DEFAULT 'manual';
+`
+
+const MIGRATIONS: string[] = [MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5]
 
 export function defaultDbPath(): string {
   return join(materinHome(), 'state.db')

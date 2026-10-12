@@ -2,6 +2,7 @@ import { connectSse } from './sse'
 import { renderEvent } from './render'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { existsSync, unlinkSync } from 'node:fs'
 
 async function api(base: string, path: string, init?: RequestInit): Promise<unknown> {
   const res = await fetch(base + path, {
@@ -109,6 +110,27 @@ async function main(): Promise<void> {
 
   const core = await import('@materin/core')
 
+  if (args[0] === 'reset') {
+    const cfgPath = join(core.materinHome(), 'config.json')
+    if (!existsSync(cfgPath)) {
+      console.log('(config.json 不存在, 无需重置)')
+      process.exit(0)
+    }
+    const answer = args.includes('--yes')
+      ? 'y'
+      : await new Promise<string>((resolve) => {
+          process.stdout.write('重置模型 provider 配置? 将删除 ' + cfgPath + ' (y/N) ')
+          process.stdin.once('data', (chunk: Buffer) => resolve(chunk.toString().trim().toLowerCase()))
+        })
+    if (answer === 'y') {
+      unlinkSync(cfgPath)
+      console.log('已重置。下次启动将重新引导配置。')
+      process.exit(0)
+    }
+    console.log('已取消')
+    process.exit(0)
+  }
+
   if (args[0] === 'config') {
     const result = await core.runOnboarding(core.materinHome(), null)
     process.exit(result.configured ? 0 : 1)
@@ -157,13 +179,17 @@ async function main(): Promise<void> {
   }
 
   console.log('\x1b[2m[materin] session ' + sessionId + ' — /exit 退出, Ctrl+C 中止任务/退出\x1b[0m')
-  connectSse(base, (data) => {
-    try {
-      const ev = JSON.parse(data) as { type: string }
-      if (ev.type === 'agent_end' || ev.type === 'agent_error') running = false
-      renderEvent(JSON.parse(data))
-    } catch {}
-  })
+  connectSse(
+    base,
+    (data) => {
+      try {
+        const ev = JSON.parse(data) as { type: string }
+        if (ev.type === 'agent_end' || ev.type === 'agent_error') running = false
+        renderEvent(JSON.parse(data))
+      } catch {}
+    },
+    (e) => console.error('\x1b[31m[sse] ' + (e instanceof Error ? e.message : String(e)) + '\x1b[0m'),
+  )
 
   const readline = await import('node:readline')
   const rl = readline.createInterface({
@@ -172,7 +198,47 @@ async function main(): Promise<void> {
     terminal: true,
     prompt: '> ',
   })
-  rl.prompt(true)
+
+  // 审批模式: Shift+Tab 循环 plan/manual/auto/passon (持久化到 session)
+  let currentMode = 'manual'
+  try {
+    const s = (await api(base, '/session/' + sessionId)) as { permissionMode?: string }
+    currentMode = s.permissionMode ?? 'manual'
+  } catch {}
+  const applyPrompt = (): void => {
+    rl.setPrompt('[' + currentMode + '] > ')
+    rl.prompt(true)
+  }
+  applyPrompt()
+
+  async function cycleMode(): Promise<void> {
+    try {
+      const updated = (await api(base, '/session/' + sessionId + '/mode', {
+        method: 'POST',
+        body: JSON.stringify({ mode: core.nextMode(currentMode) }),
+      })) as { permissionMode?: string }
+      currentMode = updated.permissionMode ?? currentMode
+      console.log('\x1b[2m[mode: ' + currentMode + ']\x1b[0m')
+      applyPrompt()
+    } catch (e) {
+      console.error('mode switch failed: ' + (e instanceof Error ? e.message : String(e)))
+      rl.prompt(true)
+    }
+  }
+
+  // Bun readline 不发 keypress 事件, 但内部 _ttyWrite 收到全部按键 — 拦截 Shift+Tab 后透传
+  const anyRl = rl as unknown as { _ttyWrite?: (d: unknown, k: unknown) => unknown }
+  const origWrite = anyRl._ttyWrite?.bind(rl)
+  if (origWrite) {
+    anyRl._ttyWrite = (d: unknown, k: unknown) => {
+      const key = k as { name?: string; shift?: boolean } | undefined
+      if (key && key.name === 'tab' && key.shift) {
+        void cycleMode()
+        return undefined
+      }
+      return origWrite(d, k)
+    }
+  }
 
   let running = false
 

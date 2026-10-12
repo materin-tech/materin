@@ -14,6 +14,14 @@ export { Bus, type Listener } from './bus'
 export { createDefaultTools, bashTool, readTool, editTool, writeTool } from './tools'
 export type { Tool, ToolContext, ToolOutput } from './tools/types'
 export { AgentSession, type AgentEvent, type AgentDeps } from './agent/loop'
+export {
+  normalizeMode,
+  nextMode,
+  resolveToolDecision,
+  MODE_CYCLE,
+  type PermissionMode,
+} from './agent/modes'
+export { listFiles, atToken } from './fs-list'
 export { SYSTEM_PROMPT } from './agent/system-prompt'
 export { compact, SUMMARIZE_PROMPT, type CompactionResult, type ResolveProvider } from './agent/compaction'
 export { PermissionManager, parsePermissionRules, wildcardMatch, type PermissionRule, type PermissionAction, type PermissionDecision } from './permissions'

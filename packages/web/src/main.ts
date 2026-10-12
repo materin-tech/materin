@@ -9,6 +9,7 @@ import { state } from './state'
 import { appendSystem } from './ui'
 import { loadSessions, openSession, newSession, reloadCurrent } from './sessions'
 import { initComposer } from './composer'
+import { initComposerResize } from './composer-resize'
 import { acActive } from './ac'
 import { initConfigModal, openConfigModal, type MaskedConfig } from './config-modal'
 import { initWorkspace } from './workspace'
@@ -80,6 +81,7 @@ function boot(): void {
   initSearch()
   initModeSelect()
   initComposer()
+  initComposerResize()
   initConfigModal()
   initUnconfiguredChip()
   void initWorkspace()

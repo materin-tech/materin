@@ -17,10 +17,10 @@ export interface ProviderPreset {
 
 export const PROVIDER_PRESETS: ProviderPreset[] = [
   { id: 'anthropic', label: 'Claude (Anthropic)', apiKeyEnv: 'ANTHROPIC_API_KEY', baseUrlEnv: 'ANTHROPIC_BASE_URL', defaultModel: 'claude-sonnet-5-5' },
-  { id: 'deepseek', label: 'DeepSeek', apiKeyEnv: 'DEEPSEEK_API_KEY', defaultModel: 'deepseek-chat' },
-  { id: 'qwen', label: 'Qwen 通义 (DashScope)', apiKeyEnv: 'DASHSCOPE_API_KEY', defaultModel: 'qwen-plus' },
-  { id: 'kimi', label: 'Kimi (Moonshot)', apiKeyEnv: 'MOONSHOT_API_KEY', defaultModel: 'kimi-k2' },
-  { id: 'glm', label: '智谱 GLM', apiKeyEnv: 'ZAI_API_KEY', defaultModel: 'glm-4.7' },
+  { id: 'deepseek', label: 'DeepSeek', apiKeyEnv: 'DEEPSEEK_API_KEY', baseUrlEnv: 'DEEPSEEK_BASE_URL', defaultModel: 'deepseek-chat' },
+  { id: 'qwen', label: 'Qwen 通义 (DashScope)', apiKeyEnv: 'DASHSCOPE_API_KEY', baseUrlEnv: 'DASHSCOPE_BASE_URL', defaultModel: 'qwen-plus' },
+  { id: 'kimi', label: 'Kimi (Moonshot)', apiKeyEnv: 'MOONSHOT_API_KEY', baseUrlEnv: 'MOONSHOT_BASE_URL', defaultModel: 'kimi-k2' },
+  { id: 'glm', label: '智谱 GLM', apiKeyEnv: 'ZAI_API_KEY', baseUrlEnv: 'ZAI_BASE_URL', defaultModel: 'glm-4.7' },
   { id: 'openai', label: 'OpenAI', apiKeyEnv: 'OPENAI_API_KEY', baseUrlEnv: 'OPENAI_BASE_URL', defaultModel: 'gpt-5.1' },
 ]
 

@@ -70,6 +70,23 @@ packages/
 └── tui/      # scrollback TUI, server 的薄客户端
 ```
 
+## 安装
+
+```bash
+# npm (推荐, 无需 Bun — 内含编译好的平台二进制)
+npm install -g materin
+
+# 或从 release 包
+tar xzf materin-v0.1.0-darwin-arm64.tar.gz && ./materin
+
+# 或源码
+bun install && bun run dev
+```
+
+首次启动交互式配置 provider (api key / base_url / 默认模型, 私有化部署可自定义 base_url),
+配置存于 `~/.materin/config.json` (0600), 也可全部用环境变量覆盖 (`materin config` 重配,
+`-d <dir>` 指定数据根目录)。
+
 ## 渠道机器人（钉钉/飞书/企业微信）
 
 ```bash

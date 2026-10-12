@@ -68,9 +68,11 @@ export async function runOnboarding(home: string, cfg: MaterinConfig | null, io:
     io.log('未输入 key, 退出。可重新运行完成配置。')
     return { configured: false }
   }
+  const baseUrl = await io.ask('Base URL (回车=官方默认, 私有化部署填自己的地址): ')
+  const model = await io.ask('默认模型 (回车=' + preset.defaultModel + '): ')
   const next: MaterinConfig = cfg ?? {}
-  next.providers = { ...(next.providers ?? {}), [preset.id]: { apiKey } }
-  next.defaultModel = preset.defaultModel
+  next.providers = { ...(next.providers ?? {}), [preset.id]: { apiKey, ...(baseUrl ? { baseUrl } : {}) } }
+  next.defaultModel = model || preset.defaultModel
   saveConfig(next, home)
   applyConfigToEnv(next)
   io.log('已写入 ' + home + '/config.json (0600)')

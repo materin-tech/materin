@@ -61,35 +61,35 @@ const REGISTRY: Record<string, ModelInfo> = {
   // DeepSeek
   'deepseek-chat': {
     api: 'openai-completions', apiKeyEnv: 'DEEPSEEK_API_KEY',
-    baseUrl: 'https://api.deepseek.com', contextWindow: 64_000,
+    baseUrl: process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com', contextWindow: 64_000,
     compat: { thinkingFormat: 'deepseek', reasoningField: 'reasoning_content' },
   },
   'deepseek-reasoner': {
     api: 'openai-completions', apiKeyEnv: 'DEEPSEEK_API_KEY',
-    baseUrl: 'https://api.deepseek.com', contextWindow: 64_000,
+    baseUrl: process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com', contextWindow: 64_000,
     compat: { thinkingFormat: 'deepseek', reasoningField: 'reasoning_content' },
   },
   // Qwen (DashScope OpenAI-compatible 端点)
   'qwen-max': {
     api: 'openai-completions', apiKeyEnv: 'DASHSCOPE_API_KEY',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', contextWindow: 32_000,
+    baseUrl: process.env.DASHSCOPE_BASE_URL ?? 'https://dashscope.aliyuncs.com/compatible-mode/v1', contextWindow: 32_000,
     compat: { thinkingFormat: 'qwen' },
   },
   'qwen-plus': {
     api: 'openai-completions', apiKeyEnv: 'DASHSCOPE_API_KEY',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', contextWindow: 128_000,
+    baseUrl: process.env.DASHSCOPE_BASE_URL ?? 'https://dashscope.aliyuncs.com/compatible-mode/v1', contextWindow: 128_000,
     compat: { thinkingFormat: 'qwen' },
   },
   // Kimi (Moonshot)
   'kimi-k2': {
     api: 'openai-completions', apiKeyEnv: 'MOONSHOT_API_KEY',
-    baseUrl: 'https://api.moonshot.cn/v1', contextWindow: 128_000,
+    baseUrl: process.env.MOONSHOT_BASE_URL ?? 'https://api.moonshot.cn/v1', contextWindow: 128_000,
     compat: { thinkingFormat: 'kimi' },
   },
   // 智谱 GLM
   'glm-4.7': {
     api: 'openai-completions', apiKeyEnv: 'ZAI_API_KEY',
-    baseUrl: 'https://open.bigmodel.cn/api/paas/v4', contextWindow: 128_000,
+    baseUrl: process.env.ZAI_BASE_URL ?? 'https://open.bigmodel.cn/api/paas/v4', contextWindow: 128_000,
     compat: { thinkingFormat: 'zai' },
   },
 }

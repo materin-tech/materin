@@ -27,12 +27,18 @@ import { ConsoleAdapter } from './adapters/console'
  * gateway binary: 按环境变量注册渠道适配器并启动.
  */
 
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log('usage: ' + (process.argv[1] ?? 'materin-server') + ' [-d <data-dir>]\n  env: see README (provider keys, MATERIN_PORT, MATERIN_MODEL, MATERIN_PERMISSIONS)')
+  process.exit(0)
+}
+
 // -d <dir> 指定数据根目录 (默认 ~/.materin); 必须在 openDb 之前设置
 const dIdx = process.argv.indexOf('-d')
 if (dIdx > 0 && process.argv[dIdx + 1]) process.env.MATERIN_HOME = process.argv[dIdx + 1]!
 
 const bootCfg = loadConfig()
 applyConfigToEnv(bootCfg)
+if (!process.env.MATERIN_MODEL && bootCfg?.defaultModel) process.env.MATERIN_MODEL = bootCfg.defaultModel
 if (configuredProviders(bootCfg).length === 0) {
   console.error('未检测到模型配置。先运行: materin  (交互式配置)  或 export <PROVIDER>_API_KEY')
   process.exit(1)

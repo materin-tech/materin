@@ -1,0 +1,22 @@
+/**
+ * Vanilla-TS DOM rendering for the Materin web UI (no framework).
+ * Pure render helpers: main.ts owns state, fetching and SSE.
+ */
+
+export interface UiBlock {
+  type: string
+  text?: string
+  id?: string
+  name?: string
+  arguments?: unknown
+  mimeType?: string
+  data?: string
+  content?: UiBlock[]
+  isError?: boolean
+}
+
+export interface UiMessage {
+  id: string
+  role: 'user' | 'assistant' | 'toolResult'
+  server.ts line 5
+}

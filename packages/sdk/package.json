@@ -1,0 +1,8 @@
+{
+  "name": "@materin/sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/client.ts"
+  }
+}

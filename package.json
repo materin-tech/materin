@@ -1,0 +1,28 @@
+{
+  "name": "materin",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run packages/tui/src/index.ts",
+    "server": "bun run packages/server/src/index.ts",
+    "gateway": "bun run packages/gateway/src/index.ts",
+    "web:build": "bun run --cwd packages/web build",
+    "test": "bun test packages/core/test packages/gateway/test packages/ai/test",
+    "typecheck": "tsc --noEmit",
+    "compile": "bun run scripts/sync-version.ts && bun build --compile packages/tui/src/index.ts --outfile dist/materin",
+    "compile:server": "bun run scripts/sync-version.ts && bun build --compile packages/server/src/index.ts --outfile dist/materin-server",
+    "compile:gateway": "bun run scripts/sync-version.ts && bun build --compile packages/gateway/src/index.ts --outfile dist/materin-gateway"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^22",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.74.0",
+    "dingtalk-stream": "^2.1.6-beta.1"
+  }
+}

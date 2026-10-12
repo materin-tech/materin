@@ -1,0 +1,9 @@
+{
+  "name": "@materin/web",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "bun build src/main.ts --outdir dist --minify && cp index.html dist/"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@materin/server",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/app.ts"
+  },
+  "dependencies": {
+    "@materin/core": "workspace:*",
+    "@materin/ai": "workspace:*",
+    "hono": "^4"
+  }
+}

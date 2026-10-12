@@ -1,0 +1,12 @@
+{
+  "name": "@materin/core",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@materin/ai": "workspace:*",
+    "@sinclair/typebox": "^0.34"
+  }
+}

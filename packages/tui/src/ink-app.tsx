@@ -10,20 +10,20 @@ import { useFileComplete } from './hooks/use-file-complete'
 import { useInputHandlers } from './hooks/use-input-handlers'
 import { commandOutput, type CommandBody } from './components/command-output'
 import { errMsg } from './hooks/run-helpers'
+import { apiPost } from './api'
 import type { AppProps, TranscriptItem, TranscriptPart, LiveStream, LastTool } from './components/types'
 
 export function App(props: AppProps): JSX.Element {
   const [items, setItems] = useState<TranscriptItem[]>(() => [
-  { id: 0, kind: 'logo', version: props.version ?? 'dev' },
-  { id: 1, kind: 'system', text: props.banner },
-])
+    { id: 0, kind: 'logo', version: props.version ?? 'dev' },
+    { id: 1, kind: 'system', text: props.banner },
+  ])
   const [input, setInput] = useState('')
   const [mode, setMode] = useState(props.initialMode)
   const [sessionId, setSessionId] = useState(props.sessionId)
   const [running, setRunning] = useState(false)
   const [interrupting, setInterrupting] = useState(false)
   const [live, setLive] = useState<LiveStream | null>(null)
-
   const [lastTool, setLastTool] = useState<LastTool | null>(null)
   const idRef = useRef(2)
   const runningRef = useRef(false)
@@ -50,20 +50,10 @@ export function App(props: AppProps): JSX.Element {
 
   const at = useFileComplete({ base: props.base, sessionId: sessionId, input: input, enabled: !running })
 
-  async function apiPost(path: string, body: unknown): Promise<unknown> {
-    const res = await fetch(props.base + path, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) throw new Error('API ' + path + ' -> ' + String(res.status))
-    return res.json()
-  }
-
   async function runPrompt(text: string): Promise<void> {
     setRunning(true)
     try {
-      await apiPost('/session/' + sessionId + '/prompt', { text: text })
+      await apiPost(props.base, '/session/' + sessionId + '/prompt', { text: text })
     } catch (e) {
       pushItem({ kind: 'system', text: 'error: ' + errMsg(e) })
       setRunning(false)
@@ -74,7 +64,7 @@ export function App(props: AppProps): JSX.Element {
   async function runCommand(text: string): Promise<void> {
     setRunning(true)
     try {
-      const body = (await apiPost('/session/' + sessionId + '/prompt', { text: text })) as CommandBody
+      const body = (await apiPost(props.base, '/session/' + sessionId + '/prompt', { text: text })) as CommandBody
       const out = commandOutput(body)
       if (out) pushItem({ kind: 'system', text: out })
       if (body.sessionId) setSessionId(body.sessionId)
@@ -85,9 +75,10 @@ export function App(props: AppProps): JSX.Element {
     }
   }
 
+
   async function cycleMode(): Promise<void> {
     try {
-      const updated = (await apiPost('/session/' + sessionId + '/mode', { mode: nextMode(mode) })) as {
+      const updated = (await apiPost(props.base, '/session/' + sessionId + '/mode', { mode: nextMode(mode) })) as {
         permissionMode?: string
       }
       const next = updated.permissionMode ?? mode
@@ -109,7 +100,7 @@ export function App(props: AppProps): JSX.Element {
     submitPaste('')
   }
 
-  /** 提交当前输入 + 粘贴文本 (合并块内含回车时用); 单行语义, \r\n 已剥离. */
+  /** 提交当前输入 + 粘贴文本 (合并块含回车时用). */
   function submitPaste(extra: string): void {
     const text = (input + extra).trim()
     if (text.length === 0) return
@@ -132,9 +123,7 @@ export function App(props: AppProps): JSX.Element {
     setInput: setInput,
     submit: submit,
     submitPaste: submitPaste,
-    cycleMode: () => {
-      void cycleMode()
-    },
+    cycleMode: () => void cycleMode(),
     abort: abort,
     onExit: props.onExit,
   })

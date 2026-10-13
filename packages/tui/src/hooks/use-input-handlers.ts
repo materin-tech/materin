@@ -60,6 +60,16 @@ export function useInputHandlers(deps: InputHandlerDeps): void {
       deps.setInput((s) => Array.from(s).slice(0, -1).join(''))
       return
     }
+    if (chunk.includes('\x7f') || chunk.includes('\b')) {
+      // 合并到达的连发退格 (parseKeypress 只解析单键): 删 n 个字符, 余下文本追加
+      const rest = chunk.replace(/[\x7f\b]/g, '')
+      const n = chunk.length - rest.length
+      deps.setInput((s) => {
+        const kept = Array.from(s).slice(0, Math.max(0, Array.from(s).length - n)).join('')
+        return kept + rest
+      })
+      return
+    }
     if (key.upArrow || key.downArrow || key.leftArrow || key.pageUp || key.pageDown || key.ctrl || key.meta) return
     if (chunk.length > 0) deps.setInput((s) => s + chunk)
   })

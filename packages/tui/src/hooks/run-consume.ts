@@ -7,7 +7,7 @@ import { SENTINEL, PREVIEW_MAX, blockText, toolResultText, toolArgs, clip, advan
 export interface ConsumeDeps {
   pushItem(part: TranscriptPart): void
   setLive(live: LiveStream | null): void
-  setLastTool(tool: LastTool | null): void
+  setLastTool(tool: LastTool | null | ((prev: LastTool | null) => LastTool | null)): void
 }
 
 export interface LiveEntry extends LiveStream {
@@ -57,11 +57,14 @@ export function createConsumer(deps: ConsumeDeps, state: ConsumeState): { consum
         continue
       }
       if (row.role === 'toolResult') {
+        const preview = clip(toolResultText(block), PREVIEW_MAX)
         deps.pushItem({
           kind: 'tool-result',
-          text: clip(toolResultText(block), PREVIEW_MAX),
+          text: preview,
           isError: block.isError === true,
         })
+        // 工具结果实时进 live 区 (CC 式过程可见性)
+        deps.setLastTool((prev) => (prev ? { ...prev, result: preview } : prev))
         cur.blockIdx += 1
         cur.charIdx = 0
         continue

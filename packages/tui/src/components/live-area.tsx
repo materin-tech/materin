@@ -62,10 +62,16 @@ function LiveStreamText({ live, verbose }: { live: LiveStream; verbose: boolean 
 }
 
 function LastToolLine({ tool }: { tool: LastTool }): JSX.Element {
+  const args = tool.args.length > LIVE_TOOL_MAX ? tool.args.slice(0, LIVE_TOOL_MAX) + '…' : tool.args
   return (
-    <Text dimColor>
-      {'  ⎿ '}{tool.name}({tool.args.length > LIVE_TOOL_MAX ? tool.args.slice(0, LIVE_TOOL_MAX) + '…' : tool.args})
-    </Text>
+    <Box flexDirection="column">
+      <Text dimColor>{'  ⎿ '}{tool.name}({args})</Text>
+      {tool.result !== undefined && (
+        <Text dimColor>
+          {'  ⎿ '}{tool.result.length > 200 ? tool.result.slice(0, 200) + '…' : tool.result}
+        </Text>
+      )}
+    </Box>
   )
 }
 

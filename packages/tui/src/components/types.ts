@@ -25,6 +25,8 @@ export interface LiveStream {
 export interface LastTool {
   name: string
   args: string
+  /** 工具执行结果预览 (toolResult 到达时填充, live 区显示) */
+  result?: string
 }
 
 export interface AppProps {

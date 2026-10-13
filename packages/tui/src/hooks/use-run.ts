@@ -21,7 +21,7 @@ export interface UseRunDeps {
   interrupting: boolean
   pushItem(part: TranscriptPart): void
   setLive(live: LiveStream | null): void
-  setLastTool(tool: LastTool | null): void
+  setLastTool(tool: LastTool | null | ((prev: LastTool | null) => LastTool | null)): void
   onDone(): void
 }
 

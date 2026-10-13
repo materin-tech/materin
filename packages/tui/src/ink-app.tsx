@@ -18,7 +18,12 @@ export function App(props: AppProps): JSX.Element {
   ])
   const [input, setInput] = useState('')
   const inputRef = useRef('')
-  inputRef.current = input
+  // 同步 ref: 组合按键块内多次 setInput + submit 必须读到即时值 (渲染批处理会延迟)
+  const updateInput = (updater: (prev: string) => string): void => {
+    const next = updater(inputRef.current)
+    inputRef.current = next
+    setInput(next)
+  }
   const [mode, setMode] = useState(props.initialMode)
   const [sessionId, setSessionId] = useState(props.sessionId)
   const [running, setRunning] = useState(false)
@@ -28,6 +33,9 @@ export function App(props: AppProps): JSX.Element {
   const [queue, setQueue] = useState<string[]>([])
   const [verbose, setVerbose] = useState(false)
   const idRef = useRef(2)
+  const historyRef = useRef<string[]>([])
+  const historyIdxRef = useRef(-1)
+  const draftRef = useRef('')
   const runningRef = useRef(false)
   runningRef.current = running
 
@@ -48,6 +56,10 @@ export function App(props: AppProps): JSX.Element {
     runningRef: runningRef,
     pushItem: pushItem,
     setRunning: setRunning,
+    onQueue: (t: string) => {
+      setQueue((q) => [...q, t])
+      pushItem({ kind: 'system', text: '⏳ [queued] ' + t })
+    },
     setInterrupting: setInterrupting,
     setMode: setMode,
     setSessionId: setSessionId,
@@ -80,11 +92,15 @@ export function App(props: AppProps): JSX.Element {
   function submitText(text: string): void {
     const t = text.trim()
     if (t.length === 0) return
-    pushItem({ kind: 'user', text: t })
     if (t.startsWith('/')) {
+      pushItem({ kind: 'user', text: t })
       void actions.runCommand(t)
       return
     }
+    // 提交瞬间同步置位: POST 往返期间新输入必须走队列 (服务器 409 兜底)
+    setRunning(true)
+    runningRef.current = true
+    pushItem({ kind: 'user', text: t })
     void actions.runPrompt(t)
   }
 
@@ -97,6 +113,8 @@ export function App(props: AppProps): JSX.Element {
   function submitPaste(extra: string): void {
     const text = (inputRef.current + extra).trim()
     if (text.length === 0) return
+    // 同步清空 (setInput 是异步的, 段循环内第二次提交会读到未清空的 ref)
+    inputRef.current = ''
     setInput('')
     if (text === '/exit') {
       props.onExit()
@@ -113,12 +131,34 @@ export function App(props: AppProps): JSX.Element {
   useInputHandlers({
     runningRef: runningRef,
     at: at,
-    setInput: setInput,
+    setInput: updateInput,
     submit: submit,
     submitPaste: submitPaste,
     cycleMode: () => void actions.cycleMode(),
     abort: actions.abort,
     toggleVerbose: () => setVerbose((v) => !v),
+    onHistoryUp: () => {
+      const h = historyRef.current
+      if (h.length === 0) return
+      if (historyIdxRef.current === -1) {
+        draftRef.current = inputRef.current
+        historyIdxRef.current = h.length - 1
+      } else if (historyIdxRef.current > 0) {
+        historyIdxRef.current -= 1
+      }
+      setInput(h[historyIdxRef.current] ?? '')
+    },
+    onHistoryDown: () => {
+      const h = historyRef.current
+      if (historyIdxRef.current === -1) return
+      historyIdxRef.current += 1
+      if (historyIdxRef.current >= h.length) {
+        historyIdxRef.current = -1
+        setInput(draftRef.current)
+      } else {
+        setInput(h[historyIdxRef.current] ?? '')
+      }
+    },
     onExit: props.onExit,
   })
 

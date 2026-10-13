@@ -18,6 +18,8 @@ export interface Actions {
 
 export interface ActionsDeps {
   http: WorkerHttp
+  /** 服务器返回 409 (仍在运行) 时转排队 — App 注入. */
+  onQueue?(text: string): void
   sessionId: string
   mode: string
   runningRef: { current: boolean }
@@ -34,7 +36,12 @@ export function useActions(deps: ActionsDeps): Actions {
     try {
       await deps.http.request('POST', '/session/' + deps.sessionId + '/prompt', { text: text })
     } catch (e) {
-      deps.pushItem({ kind: 'system', text: 'error: ' + errMsg(e) })
+      const msg = e instanceof Error ? e.message : String(e)
+      if (msg.includes('409') && deps.onQueue) {
+        deps.onQueue(text)
+        return
+      }
+      deps.pushItem({ kind: 'system', text: 'error: ' + msg })
       deps.setRunning(false)
     }
   }

@@ -13,6 +13,8 @@ export interface InputHandlerDeps {
   cycleMode(): void
   abort(): void
   toggleVerbose(): void
+  onHistoryUp(): void
+  onHistoryDown(): void
   onExit(): void
 }
 
@@ -41,8 +43,13 @@ export function useInputHandlers(deps: InputHandlerDeps): void {
       return
     }
     if (/[\r\n]/.test(chunk)) {
-      // 多键合并到达 (Ink parseKeypress 只解析单键): 内嵌回车 → 提交
-      deps.submitPaste(chunk.replace(/[\r\n]/g, ''))
+      // 多键合并到达 (Ink parseKeypress 只解析单键): 按内嵌回车拆行, 逐行追加+提交
+      const segments = chunk.split(/[\r\n]+/).filter((seg) => seg.length > 0)
+      for (const seg of segments) {
+        deps.setInput((s) => s + seg)
+        deps.submit()
+      }
+      if (segments.length === 0) deps.submit()
       return
     }
     if (key.escape) {
@@ -53,12 +60,14 @@ export function useInputHandlers(deps: InputHandlerDeps): void {
       if (deps.at.isOpen) deps.setInput(() => deps.at.apply())
       return
     }
-    if (key.upArrow && deps.at.isOpen) {
-      deps.at.move(-1)
+    if (key.upArrow) {
+      if (deps.at.isOpen) deps.at.move(-1)
+      else deps.onHistoryUp()
       return
     }
-    if (key.downArrow && deps.at.isOpen) {
-      deps.at.move(1)
+    if (key.downArrow) {
+      if (deps.at.isOpen) deps.at.move(1)
+      else deps.onHistoryDown()
       return
     }
     if (key.delete) {

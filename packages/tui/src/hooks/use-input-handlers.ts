@@ -17,6 +17,8 @@ export interface InputHandlerDeps {
   toggleVerbose(): void
   /** Ctrl+Enter / Alt+Enter: 插入换行 (不提交). */
   onNewline(): void
+  /** 当前输入框内容 (用于 \ 续行判断). */
+  inputText(): string
   onHistoryUp(): void
   onHistoryDown(): void
   onExit(): void
@@ -28,7 +30,7 @@ export function useInputHandlers(deps: InputHandlerDeps): void {
       deps.cycleMode()
       return
     }
-    if (chunk === 'c' && key.ctrl) {
+    if (key.ctrl && ((key as { name?: string }).name === 'c' || chunk === '\x03')) {
       if (deps.runningRef.current) deps.abort()
       else deps.onExit()
       return
@@ -52,6 +54,11 @@ export function useInputHandlers(deps: InputHandlerDeps): void {
       return
     }
     if (key.return || chunk === '\n') {
+      // \ + Enter: 续行 (CC 同款, 任何终端可用)
+      if (deps.inputText().endsWith('\\')) {
+        deps.setInput((s) => s.replace(/\\$/, '\n'))
+        return
+      }
       // / 补全: 仅当输入不是某条命令的精确全名时, Enter 才应用补全;
       // 精确匹配 (如完整输入 /exit /token) → 直接提交执行
       if (deps.cmd.isOpen) {

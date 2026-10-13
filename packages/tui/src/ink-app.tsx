@@ -107,6 +107,11 @@ export function App(props: AppProps): JSX.Element {
   }
 
   function submit(): void {
+    // \ + Enter: 续行 (CC 同款, 任何终端可用)
+    if (inputRef.current.endsWith('\\')) {
+      updateInput((prev) => prev.replace(/\\$/, '\n'))
+      return
+    }
     if (inputRef.current.trim().length === 0) return
     submitPaste('')
   }
@@ -140,6 +145,7 @@ export function App(props: AppProps): JSX.Element {
     cycleMode: () => void actions.cycleMode(),
     abort: actions.abort,
     toggleVerbose: () => setVerbose((v) => !v),
+    inputText: () => inputRef.current,
     onNewline: () => updateInput((prev) => prev + '\n'),
     onHistoryUp: () => {
       const h = historyRef.current

@@ -37,17 +37,20 @@ function FilePopup({ candidates, selIdx }: { candidates: string[]; selIdx: numbe
   )
 }
 
-function LiveStreamText({ live }: { live: LiveStream }): JSX.Element {
+function LiveStreamText({ live, verbose }: { live: LiveStream; verbose: boolean }): JSX.Element {
   const shown = live.text.length > LIVE_TEXT_MAX ? '…' + live.text.slice(-LIVE_TEXT_MAX) : live.text
   if (live.kind === 'thinking') {
+    if (!verbose) {
+      return (
+        <Box paddingLeft={2}>
+          <Text dimColor italic>✻ Thinking… (ctrl+o 展开)</Text>
+        </Box>
+      )
+    }
     return (
       <Box flexDirection="column" paddingLeft={2}>
-        <Text dimColor italic>
-          ✻ Thinking…
-        </Text>
-        <Text dimColor italic>
-          {shown}
-        </Text>
+        <Text dimColor italic>✻ Thinking… (ctrl+o 折叠)</Text>
+        <Text dimColor italic>{shown}</Text>
       </Box>
     )
   }
@@ -67,9 +70,14 @@ function LastToolLine({ tool }: { tool: LastTool }): JSX.Element {
 }
 
 function InputBox({ input }: { input: string }): JSX.Element {
+  // 横向滚动: 只显示放得下的尾部 (CC 同款, 不折行溢出)
+  const cols = process.stdout.columns ?? 80
+  const avail = Math.max(8, cols - 8)
+  const chars = Array.from(input)
+  const visible = chars.length > avail ? chars.slice(-avail).join('') : input
   return (
     <Box borderStyle="round" borderColor="gray" paddingX={1}>
-      <Text>{'> '}{input}{'█'}</Text>
+      <Text wrap="end">{'> '}{visible}{'█'}</Text>
     </Box>
   )
 }
@@ -92,6 +100,7 @@ export interface LiveAreaProps {
   lastTool: LastTool | null
   candidates: string[]
   selIdx: number
+  verbose: boolean
 }
 
 export function LiveArea(props: LiveAreaProps): JSX.Element {
@@ -106,15 +115,14 @@ export function LiveArea(props: LiveAreaProps): JSX.Element {
     <Box flexDirection="column">
       {props.mode !== 'manual' && <Text dimColor>⏵⏵ {props.mode} mode</Text>}
       {props.candidates.length > 0 && <FilePopup candidates={props.candidates} selIdx={props.selIdx} />}
-      {props.running ? (
+      {props.running && (
         <Box flexDirection="column">
           <Spinner verb={verb} />
           {props.lastTool !== null && <LastToolLine tool={props.lastTool} />}
-          {props.live !== null && <LiveStreamText live={props.live} />}
+          {props.live !== null && <LiveStreamText live={props.live} verbose={props.verbose} />}
         </Box>
-      ) : (
-        <InputBox input={props.input} />
       )}
+      <InputBox input={props.input} />
       <StatusLine model={props.model} mode={props.mode} />
     </Box>
   )

@@ -1,12 +1,13 @@
 /**
- * Polling run loop: 每 300ms GET /session/:id/messages (瞬时短请求, 无在途流式
- * fetch — 规避 Bun stdin 饿死 bug). 光标走 root→leaf; 流式内容留在 live 区,
- * 块/回合完成后经 createConsumer 移入 Static.
+ * Polling run loop: 每 300ms GET /session/:id/messages — 请求经 WorkerHttp 在
+ * Worker 线程执行 (主线程零 fetch — Bun raw-stdin bug). 光标走 root→leaf; 流式
+ * 内容留在 live 区, 块/回合完成后经 createConsumer 移入 Static.
  */
 
 import { useEffect, useRef } from 'react'
 import type { MessageRow } from '@materin/core'
 import type { LiveStream, LastTool, TranscriptPart } from '../components/types'
+import type { WorkerHttp } from '../http'
 import { createConsumer, freshCursor, type LiveEntry } from './run-consume'
 
 const POLL_MS = 300
@@ -14,7 +15,7 @@ const TIMEOUT_MS = 120_000
 const ABORT_TIMEOUT_MS = 10_000
 
 export interface UseRunDeps {
-  base: string
+  http: WorkerHttp
   sessionId: string
   running: boolean
   interrupting: boolean
@@ -73,9 +74,10 @@ export function useRun(deps: UseRunDeps): void {
     if (inFlight.current) return
     inFlight.current = true
     try {
-      const res = await fetch(ref.current.base + '/session/' + ref.current.sessionId + '/messages')
-      if (!res.ok) throw new Error('messages -> ' + String(res.status))
-      const rows = (await res.json()) as MessageRow[]
+      const rows = await ref.current.http.request<MessageRow[]>(
+        'GET',
+        '/session/' + ref.current.sessionId + '/messages',
+      )
       if (cursor.current.msgIdx === 0 && cursor.current.blockIdx === 0 && cursor.current.charIdx === 0) {
         // 首次轮询 (含恢复旧会话): 跳过完整历史; 末条未完成则从该行消费
         const lastRow = rows[rows.length - 1]

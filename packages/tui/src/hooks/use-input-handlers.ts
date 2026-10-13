@@ -12,6 +12,7 @@ export interface InputHandlerDeps {
   submitPaste(text: string): void
   cycleMode(): void
   abort(): void
+  toggleVerbose(): void
   onExit(): void
 }
 
@@ -26,8 +27,12 @@ export function useInputHandlers(deps: InputHandlerDeps): void {
       else deps.onExit()
       return
     }
-    if (deps.runningRef.current) {
-      if (key.escape) deps.abort()
+    if (key.escape && deps.runningRef.current) {
+      deps.abort()
+      return
+    }
+    if (chunk === 'o' && key.ctrl) {
+      deps.toggleVerbose()
       return
     }
     if (key.return || chunk === '\n') {

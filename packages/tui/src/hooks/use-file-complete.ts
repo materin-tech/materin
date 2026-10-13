@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import type { WorkerHttp } from '../http'
 
 export const AT_RE = /(?:^|\s)@(\S*)$/
 
@@ -22,7 +23,7 @@ export interface AtComplete {
 }
 
 export function useFileComplete(opts: {
-  base: string
+  http: WorkerHttp
   sessionId: string
   input: string
   enabled: boolean
@@ -45,9 +46,12 @@ export function useFileComplete(opts: {
     }
     let cancelled = false
     const timer = setTimeout(() => {
-      fetch(opts.base + '/session/' + opts.sessionId + '/files?q=' + encodeURIComponent(match[1]!))
-        .then((r) => r.json())
-        .then((body: { files?: string[] }) => {
+      void opts.http
+        .request<{ files?: string[] }>(
+          'GET',
+          '/session/' + opts.sessionId + '/files?q=' + encodeURIComponent(match[1]!),
+        )
+        .then((body) => {
           if (cancelled) return
           setCandidates((body.files ?? []).slice(0, MAX_CANDIDATES))
           setSelIdx(0)

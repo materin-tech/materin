@@ -1,16 +1,14 @@
 /** Ink root: Static transcript + live area; useInput + useRun + @ completion. */
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Box } from 'ink'
-import { nextMode } from '@materin/core'
 import { Transcript } from './components/transcript'
 import { LiveArea } from './components/live-area'
 import { useRun } from './hooks/use-run'
 import { useFileComplete } from './hooks/use-file-complete'
 import { useInputHandlers } from './hooks/use-input-handlers'
-import { commandOutput, type CommandBody } from './components/command-output'
-import { errMsg } from './hooks/run-helpers'
-import { apiPost } from './api'
+import { useActions } from './hooks/use-actions'
+import { createWorkerHttp } from './http'
 import type { AppProps, TranscriptItem, TranscriptPart, LiveStream, LastTool } from './components/types'
 
 export function App(props: AppProps): JSX.Element {
@@ -19,12 +17,16 @@ export function App(props: AppProps): JSX.Element {
     { id: 1, kind: 'system', text: props.banner },
   ])
   const [input, setInput] = useState('')
+  const inputRef = useRef('')
+  inputRef.current = input
   const [mode, setMode] = useState(props.initialMode)
   const [sessionId, setSessionId] = useState(props.sessionId)
   const [running, setRunning] = useState(false)
   const [interrupting, setInterrupting] = useState(false)
   const [live, setLive] = useState<LiveStream | null>(null)
   const [lastTool, setLastTool] = useState<LastTool | null>(null)
+  const [queue, setQueue] = useState<string[]>([])
+  const [verbose, setVerbose] = useState(false)
   const idRef = useRef(2)
   const runningRef = useRef(false)
   runningRef.current = running
@@ -34,8 +36,25 @@ export function App(props: AppProps): JSX.Element {
     setItems((prev) => [...prev, item])
   }
 
+  const [http] = useState(() => createWorkerHttp(props.base))
+  useEffect(() => {
+    return () => http.close()
+  }, [http])
+
+  const actions = useActions({
+    http: http,
+    sessionId: sessionId,
+    mode: mode,
+    runningRef: runningRef,
+    pushItem: pushItem,
+    setRunning: setRunning,
+    setInterrupting: setInterrupting,
+    setMode: setMode,
+    setSessionId: setSessionId,
+  })
+
   useRun({
-    base: props.base,
+    http: http,
     sessionId: sessionId,
     running: running,
     interrupting: interrupting,
@@ -45,76 +64,50 @@ export function App(props: AppProps): JSX.Element {
     onDone: () => {
       setRunning(false)
       setInterrupting(false)
+      setQueue((q) => {
+        if (q.length === 0) return q
+        const next = q[0]
+        if (next === undefined) return q
+        setTimeout(() => submitText(next), 60)
+        return q.slice(1)
+      })
     },
   })
 
-  const at = useFileComplete({ base: props.base, sessionId: sessionId, input: input, enabled: !running })
+  const at = useFileComplete({ http: http, sessionId: sessionId, input: input, enabled: !running })
 
-  async function runPrompt(text: string): Promise<void> {
-    setRunning(true)
-    try {
-      await apiPost(props.base, '/session/' + sessionId + '/prompt', { text: text })
-    } catch (e) {
-      pushItem({ kind: 'system', text: 'error: ' + errMsg(e) })
-      setRunning(false)
+  /** 排队策略: 运行中提交 → 入队, run 结束自动依次提交 (CC 同款). */
+  function submitText(text: string): void {
+    const t = text.trim()
+    if (t.length === 0) return
+    pushItem({ kind: 'user', text: t })
+    if (t.startsWith('/')) {
+      void actions.runCommand(t)
+      return
     }
-  }
-
-  /** Slash command: await JSON response, render output/models/error locally. */
-  async function runCommand(text: string): Promise<void> {
-    setRunning(true)
-    try {
-      const body = (await apiPost(props.base, '/session/' + sessionId + '/prompt', { text: text })) as CommandBody
-      const out = commandOutput(body)
-      if (out) pushItem({ kind: 'system', text: out })
-      if (body.sessionId) setSessionId(body.sessionId)
-    } catch (e) {
-      pushItem({ kind: 'system', text: 'error: ' + errMsg(e) })
-    } finally {
-      setRunning(false)
-    }
-  }
-
-
-  async function cycleMode(): Promise<void> {
-    try {
-      const updated = (await apiPost(props.base, '/session/' + sessionId + '/mode', { mode: nextMode(mode) })) as {
-        permissionMode?: string
-      }
-      const next = updated.permissionMode ?? mode
-      setMode(next)
-      pushItem({ kind: 'mode', text: next })
-    } catch (e) {
-      pushItem({ kind: 'system', text: 'mode switch failed: ' + errMsg(e) })
-    }
-  }
-
-  function abort(): void {
-    if (!runningRef.current) return
-    setInterrupting(true)
-    void fetch(props.base + '/session/' + sessionId + '/abort', { method: 'POST' }).catch(() => {})
+    void actions.runPrompt(t)
   }
 
   function submit(): void {
-    if (input.trim().length === 0) return
+    if (inputRef.current.trim().length === 0) return
     submitPaste('')
   }
 
   /** 提交当前输入 + 粘贴文本 (合并块含回车时用). */
   function submitPaste(extra: string): void {
-    const text = (input + extra).trim()
+    const text = (inputRef.current + extra).trim()
     if (text.length === 0) return
     setInput('')
     if (text === '/exit') {
       props.onExit()
       return
     }
-    pushItem({ kind: 'user', text: text })
-    if (text.startsWith('/')) {
-      void runCommand(text)
+    if (runningRef.current) {
+      setQueue((q) => [...q, text])
+      pushItem({ kind: 'system', text: '⏳ [queued] ' + text })
       return
     }
-    void runPrompt(text)
+    submitText(text)
   }
 
   useInputHandlers({
@@ -123,8 +116,9 @@ export function App(props: AppProps): JSX.Element {
     setInput: setInput,
     submit: submit,
     submitPaste: submitPaste,
-    cycleMode: () => void cycleMode(),
-    abort: abort,
+    cycleMode: () => void actions.cycleMode(),
+    abort: actions.abort,
+    toggleVerbose: () => setVerbose((v) => !v),
     onExit: props.onExit,
   })
 
@@ -141,6 +135,7 @@ export function App(props: AppProps): JSX.Element {
         lastTool={lastTool}
         candidates={at.candidates}
         selIdx={at.selIdx}
+        verbose={verbose}
       />
     </Box>
   )

@@ -15,6 +15,8 @@ export interface InputHandlerDeps {
   cycleMode(): void
   abort(): void
   toggleVerbose(): void
+  /** Ctrl+Enter / Alt+Enter: 插入换行 (不提交). */
+  onNewline(): void
   onHistoryUp(): void
   onHistoryDown(): void
   onExit(): void
@@ -31,8 +33,18 @@ export function useInputHandlers(deps: InputHandlerDeps): void {
       else deps.onExit()
       return
     }
-    if (key.escape && deps.runningRef.current) {
-      deps.abort()
+    // Esc: 单独 ESC 字节在 Bun+Ink 下 key.escape 可能不置位 — 按字节兜底
+    if (chunk === '\x1b' || key.escape) {
+      if (deps.runningRef.current) deps.abort()
+      else {
+        deps.at.dismiss()
+        deps.cmd.dismiss()
+      }
+      return
+    }
+    // 换行不提交: Alt+Enter (\x1b\r) / Ctrl+J (\n) / meta+return — 多数终端可发
+    if (chunk === '\x1b\r' || chunk === '\n' || (key.return && key.meta)) {
+      deps.onNewline()
       return
     }
     if (chunk === 'o' && key.ctrl) {

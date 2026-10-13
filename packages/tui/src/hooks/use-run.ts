@@ -86,8 +86,11 @@ export function useRun(deps: UseRunDeps): void {
       }
       consumer.consume(rows)
       const lastRow = rows[rows.length - 1]
+      // 完成判定: 末行必须是 assistant 且 stopReason 非中间态 ('tool_use' 是工具循环的中间轮)
       const done =
-        lastRow !== undefined && lastRow.role === 'assistant' && lastRow.stopReason !== null && cursor.current.msgIdx >= rows.length
+        lastRow !== undefined && lastRow.role === 'assistant' &&
+        lastRow.stopReason !== null && lastRow.stopReason !== 'tool_use' &&
+        cursor.current.msgIdx >= rows.length
       if (done || Date.now() > deadline.current || (ref.current.interrupting && Date.now() > abortDeadline.current)) {
         consumer.flushLive()
         ref.current.onDone()

@@ -87,8 +87,8 @@ export function App(props: AppProps): JSX.Element {
     },
   })
 
-  const at = useFileComplete({ http: http, sessionId: sessionId, input: input, enabled: !running })
-  const cmd = useCommandComplete({ http: http, input: input, enabled: !running })
+  const at = useFileComplete({ http: http, sessionId: sessionId, input: input, enabled: true })
+  const cmd = useCommandComplete({ http: http, input: input, enabled: true })
 
   /** 排队策略: 运行中提交 → 入队, run 结束自动依次提交 (CC 同款). */
   function submitText(text: string): void {
@@ -140,6 +140,7 @@ export function App(props: AppProps): JSX.Element {
     cycleMode: () => void actions.cycleMode(),
     abort: actions.abort,
     toggleVerbose: () => setVerbose((v) => !v),
+    onNewline: () => updateInput((prev) => prev + '\n'),
     onHistoryUp: () => {
       const h = historyRef.current
       if (h.length === 0) return

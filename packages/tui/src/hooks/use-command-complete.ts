@@ -60,13 +60,17 @@ export function useCommandComplete(opts: { http: WorkerHttp; input: string; enab
     setCandidates(
       all
         .filter((c) => c.name.slice(1).toLowerCase().startsWith(token))
-        .slice(0, MAX_CANDIDATES),
+        ,
     )
     setSelIdx(0)
   }, [opts.input, opts.enabled, all, active, dismissed.current])
 
   function move(delta: number): void {
-    setSelIdx((i) => (candidates.length === 0 ? 0 : (i + delta + candidates.length) % candidates.length))
+    // CC 对齐: 到边缘即停, 不环绕
+    setSelIdx((i) => {
+      if (candidates.length === 0) return 0
+      return Math.min(Math.max(i + delta, 0), candidates.length - 1)
+    })
   }
 
   function apply(): string {

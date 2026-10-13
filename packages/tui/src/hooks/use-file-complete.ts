@@ -9,7 +9,7 @@ import type { WorkerHttp } from '../http'
 export const AT_RE = /(?:^|\s)@(\S*)$/
 
 const FETCH_DEBOUNCE_MS = 120
-const MAX_CANDIDATES = 6
+const MAX_CANDIDATES = 200  // 全量保留, 弹层窗口滚动展示
 
 export interface AtComplete {
   candidates: string[]
@@ -67,7 +67,11 @@ export function useFileComplete(opts: {
   }, [opts.input, opts.enabled])
 
   function move(delta: number): void {
-    setSelIdx((i) => (candidates.length === 0 ? 0 : (i + delta + candidates.length) % candidates.length))
+    // CC 对齐: 到边缘即停, 不环绕
+    setSelIdx((i) => {
+      if (candidates.length === 0) return 0
+      return Math.min(Math.max(i + delta, 0), candidates.length - 1)
+    })
   }
 
   function apply(): string {

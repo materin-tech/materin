@@ -1,11 +1,13 @@
-/** useInput state machine: Shift+Tab mode / Ctrl+C / Esc-abort / @ popup / editing. */
+/** useInput state machine: Shift+Tab mode / Ctrl+C / Esc-abort / @ popup + / command popup / editing. */
 
 import { useInput } from 'ink'
 import type { AtComplete } from './use-file-complete'
+import type { CmdComplete } from './use-command-complete'
 
 export interface InputHandlerDeps {
   runningRef: { current: boolean }
   at: AtComplete
+  cmd: CmdComplete
   setInput(updater: (prev: string) => string): void
   submit(): void
   /** 粘贴/合并块内含 \r\n 时: 追加文本并按行提交 (single-line input). */
@@ -38,6 +40,17 @@ export function useInputHandlers(deps: InputHandlerDeps): void {
       return
     }
     if (key.return || chunk === '\n') {
+      // / 补全: 仅当输入不是某条命令的精确全名时, Enter 才应用补全;
+      // 精确匹配 (如完整输入 /exit /token) → 直接提交执行
+      if (deps.cmd.isOpen) {
+        const exact = deps.cmd.candidates.some((c) => c.name === '/' + deps.cmd.token?.replace(/^\//, ''))
+        if (!exact) {
+          deps.setInput(() => deps.cmd.apply())
+          deps.cmd.dismiss()
+          return
+        }
+        deps.cmd.dismiss()
+      }
       if (deps.at.isOpen) deps.setInput(() => deps.at.apply())
       else deps.submit()
       return
@@ -53,20 +66,28 @@ export function useInputHandlers(deps: InputHandlerDeps): void {
       return
     }
     if (key.escape) {
+      deps.cmd.dismiss()
       deps.at.dismiss()
       return
     }
     if (key.tab) {
+      if (deps.cmd.isOpen) {
+        deps.setInput(() => deps.cmd.apply())
+        deps.cmd.dismiss()
+        return
+      }
       if (deps.at.isOpen) deps.setInput(() => deps.at.apply())
       return
     }
     if (key.upArrow) {
-      if (deps.at.isOpen) deps.at.move(-1)
+      if (deps.cmd.isOpen) deps.cmd.move(-1)
+      else if (deps.at.isOpen) deps.at.move(-1)
       else deps.onHistoryUp()
       return
     }
     if (key.downArrow) {
-      if (deps.at.isOpen) deps.at.move(1)
+      if (deps.cmd.isOpen) deps.cmd.move(1)
+      else if (deps.at.isOpen) deps.at.move(1)
       else deps.onHistoryDown()
       return
     }

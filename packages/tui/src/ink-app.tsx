@@ -6,6 +6,7 @@ import { Transcript } from './components/transcript'
 import { LiveArea } from './components/live-area'
 import { useRun } from './hooks/use-run'
 import { useFileComplete } from './hooks/use-file-complete'
+import { useCommandComplete } from './hooks/use-command-complete'
 import { useInputHandlers } from './hooks/use-input-handlers'
 import { useActions } from './hooks/use-actions'
 import { createWorkerHttp } from './http'
@@ -87,6 +88,7 @@ export function App(props: AppProps): JSX.Element {
   })
 
   const at = useFileComplete({ http: http, sessionId: sessionId, input: input, enabled: !running })
+  const cmd = useCommandComplete({ http: http, input: input, enabled: !running })
 
   /** 排队策略: 运行中提交 → 入队, run 结束自动依次提交 (CC 同款). */
   function submitText(text: string): void {
@@ -131,6 +133,7 @@ export function App(props: AppProps): JSX.Element {
   useInputHandlers({
     runningRef: runningRef,
     at: at,
+    cmd: cmd,
     setInput: updateInput,
     submit: submit,
     submitPaste: submitPaste,
@@ -175,6 +178,8 @@ export function App(props: AppProps): JSX.Element {
         lastTool={lastTool}
         candidates={at.candidates}
         selIdx={at.selIdx}
+        cmdCandidates={cmd.candidates}
+        cmdSelIdx={cmd.selIdx}
         verbose={verbose}
       />
     </Box>

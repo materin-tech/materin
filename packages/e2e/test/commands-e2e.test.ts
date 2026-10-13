@@ -167,6 +167,22 @@ describe('session deletion (B2)', () => {
   })
 })
 
+describe('GET /commands (autocomplete)', () => {
+  test('returns >=15 commands, each with name+description', async () => {
+    const res = await srv.get('/commands')
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { commands: Array<{ name: string; description: string; usage?: string; source?: string }> }
+    expect(body.commands.length).toBeGreaterThanOrEqual(15)
+    for (const cmd of body.commands) {
+      expect(cmd.name.startsWith('/')).toBe(true)
+      expect(typeof cmd.description).toBe('string')
+      expect(cmd.description.length).toBeGreaterThan(0)
+    }
+    expect(body.commands.some((c) => c.name === '/token')).toBe(true)
+    expect(body.commands.some((c) => c.name === '/help')).toBe(true)
+  })
+})
+
 describe('config endpoints (B4)', () => {
   test('GET /config returns masked provider view with hasKey flags, never keys', async () => {
     const res = await srv.get('/config')

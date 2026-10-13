@@ -22,7 +22,7 @@ import type { AgentEvent, AgentSession, Bus, LoadedExtensions, SessionStore } fr
 import { listAvailableModels, normalizeThinking, resolveModel } from '@materin/ai'
 import type { ImageBlock } from '@materin/ai'
 import { openApiSpec } from './openapi'
-import { buildCommandRegistry, type CommandRegistry } from './commands'
+import { BUILTIN_COMMANDS, buildCommandRegistry, type CommandRegistry } from './commands'
 
 /**
  * Server-first architecture: all state flows over HTTP + SSE.
@@ -131,6 +131,18 @@ export function createApp(deps: ServerDeps): Hono {
   })
 
   app.get('/config', (c) => c.json(maskedConfigView()))
+
+  app.get('/commands', (c) => {
+    const builtins = BUILTIN_COMMANDS.map((s) => ({
+      name: s.name,
+      description: s.description,
+      ...(s.usage ? { usage: s.usage } : {}),
+      source: 'builtin',
+    }))
+    const extensionCommands = [...(deps.getExtensions?.()?.commands.keys() ?? [])]
+    const extensions = extensionCommands.map((n) => ({ name: '/' + n, description: 'extension command', source: 'extension' }))
+    return c.json({ commands: [...extensions, ...builtins] })
+  })
 
   app.post('/config', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as {

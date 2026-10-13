@@ -1,9 +1,10 @@
-/** Live area: mode indicator, @ popup, spinner / input box, status line (CC style). */
+/** Live area: mode indicator, @ popup + / command popup, spinner / input box, status line (CC style). */
 
 import { useEffect, useState } from 'react'
 import { Box, Text } from 'ink'
 import { VERSION } from '@materin/core'
-import type { LiveStream, LastTool } from './types'
+import { FilePopup, CommandPopup } from './completion-popup'
+import type { LiveStream, LastTool, CmdCandidate } from './types'
 
 const FRAMES = ['✻', '✶', '✳', '✢', '●']
 const FRAME_MS = 120
@@ -21,19 +22,6 @@ function Spinner({ verb }: { verb: string }): JSX.Element {
       <Text color="magenta">{FRAMES[i] ?? '✻'}</Text>
       <Text> {verb}… (esc/Ctrl+C to interrupt)</Text>
     </Text>
-  )
-}
-
-function FilePopup({ candidates, selIdx }: { candidates: string[]; selIdx: number }): JSX.Element {
-  return (
-    <Box flexDirection="column" paddingLeft={2}>
-      {candidates.map((c, i) => (
-        <Text key={c + ':' + String(i)} color={i === selIdx ? 'cyan' : 'gray'}>
-          {i === selIdx ? '› ' : '  '}
-          {c}
-        </Text>
-      ))}
-    </Box>
   )
 }
 
@@ -106,6 +94,8 @@ export interface LiveAreaProps {
   lastTool: LastTool | null
   candidates: string[]
   selIdx: number
+  cmdCandidates: CmdCandidate[]
+  cmdSelIdx: number
   verbose: boolean
 }
 
@@ -121,6 +111,7 @@ export function LiveArea(props: LiveAreaProps): JSX.Element {
     <Box flexDirection="column">
       {props.mode !== 'manual' && <Text dimColor>⏵⏵ {props.mode} mode</Text>}
       {props.candidates.length > 0 && <FilePopup candidates={props.candidates} selIdx={props.selIdx} />}
+      {props.cmdCandidates.length > 0 && <CommandPopup candidates={props.cmdCandidates} selIdx={props.cmdSelIdx} />}
       {props.running && (
         <Box flexDirection="column">
           <Spinner verb={verb} />

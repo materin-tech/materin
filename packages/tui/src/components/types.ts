@@ -29,6 +29,12 @@ export interface LastTool {
   result?: string
 }
 
+/** 斜杠命令补全候选项 (GET /commands 返回条目). */
+export interface CmdCandidate {
+  name: string
+  description: string
+}
+
 export interface AppProps {
   base: string
   sessionId: string

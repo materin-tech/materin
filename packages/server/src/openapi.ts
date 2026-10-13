@@ -29,6 +29,7 @@ export function openApiSpec(): Record<string, unknown> {
         post: op('create session', body({ cwd: str, model: str }), okJson()),
       },
       '/session/{id}': { get: op('get session'), delete: op('delete a session and all dependent rows') },
+      '/commands': { get: op('list slash commands for autocomplete (builtins + extension commands)') },
       '/config': {
         get: op('masked config view (hasKey flags, no keys)'),
         post: op('merge provider config (apiKey/baseUrl/defaultModel), returns masked view'),

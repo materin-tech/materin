@@ -37,7 +37,7 @@ function createLocalServer(): Promise<{ base: string; close: () => void }> {
     const app = createApp({
       store: store,
       bus: bus,
-      createAgent: (sid) =>
+      createAgent: process.env.TUI_STRIP2 ? (() => null as never) : (sid) =>
         new core.AgentSession(sid, {
           store: store,
           resolveProvider: resolveProvider,
@@ -48,6 +48,7 @@ function createLocalServer(): Promise<{ base: string; close: () => void }> {
         }),
       resolveProvider: resolveProvider,
       answerPermission: () => false,
+      getDb: () => db,
     })
     const server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: app.fetch, idleTimeout: 255 })
     return { base: 'http://127.0.0.1:' + server.port, close: () => server.stop(true) }
@@ -98,6 +99,7 @@ async function oneShot(base: string, prompt: string, sessionArg?: string): Promi
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
+  const SKIP = (process.env.TUI_SKIP ?? '').split(',')
   // -d <dir> 数据根目录 (默认 ~/.materin); 必须在 openDb 之前设置
   const dIdx = args.indexOf('-d')
   if (dIdx >= 0 && args[dIdx + 1]) process.env.MATERIN_HOME = args[dIdx + 1]!
@@ -137,9 +139,11 @@ async function main(): Promise<void> {
   }
 
   // 首次启动: 未检测到任何模型 key 时交互式引导 (Claude Code/pi 同款逻辑)
-  const onboard = await core.ensureModelConfigured()
+  if (!SKIP.includes('onboarding')) {
+    const onboard = await core.ensureModelConfigured()
   if (!onboard.configured) process.exit(1)
-  if (!process.env.MATERIN_MODEL) process.env.MATERIN_MODEL = onboard.defaultModel
+    if (!process.env.MATERIN_MODEL) process.env.MATERIN_MODEL = onboard.defaultModel
+  }
 
   if (args[0] === 'init' || args.includes('--init')) {
     const force = args.includes('--force')
@@ -158,7 +162,7 @@ async function main(): Promise<void> {
   const prompt = promptIndex >= 0 ? args[promptIndex + 1] : undefined
   const sessionArg = args.includes('--session') ? args[args.indexOf('--session') + 1] : undefined
 
-  const { base } = await createLocalServer()
+  const { base } = SKIP.includes('server') ? { base: 'http://127.0.0.1:1' } : await createLocalServer()
 
   if (prompt !== undefined) {
     await oneShot(base, prompt, sessionArg)
@@ -178,131 +182,30 @@ async function main(): Promise<void> {
     sessionId = created.id
   }
 
-  console.log('\x1b[2m[materin] session ' + sessionId + ' — /exit 退出, Ctrl+C 中止任务/退出\x1b[0m')
-  connectSse(
-    base,
-    (data) => {
-      try {
-        const ev = JSON.parse(data) as { type: string }
-        if (ev.type === 'agent_end' || ev.type === 'agent_error') running = false
-        renderEvent(JSON.parse(data))
-      } catch {}
-    },
-    (e) => console.error('\x1b[31m[sse] ' + (e instanceof Error ? e.message : String(e)) + '\x1b[0m'),
-  )
-
-  const readline = await import('node:readline')
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    terminal: true,
-    prompt: '> ',
-  })
-
-  // 审批模式: Shift+Tab 循环 plan/manual/auto/passon (持久化到 session)
+  // 审批模式恢复 (Shift+Tab 循环 plan/manual/auto/passon, 持久化到 session)
   let currentMode = 'manual'
   try {
     const s = (await api(base, '/session/' + sessionId)) as { permissionMode?: string }
     currentMode = s.permissionMode ?? 'manual'
   } catch {}
-  const applyPrompt = (): void => {
-    rl.setPrompt('[' + currentMode + '] > ')
-    rl.prompt(true)
-  }
-  applyPrompt()
 
-  async function cycleMode(): Promise<void> {
-    try {
-      const updated = (await api(base, '/session/' + sessionId + '/mode', {
-        method: 'POST',
-        body: JSON.stringify({ mode: core.nextMode(currentMode) }),
-      })) as { permissionMode?: string }
-      currentMode = updated.permissionMode ?? currentMode
-      console.log('\x1b[2m[mode: ' + currentMode + ']\x1b[0m')
-      applyPrompt()
-    } catch (e) {
-      console.error('mode switch failed: ' + (e instanceof Error ? e.message : String(e)))
-      rl.prompt(true)
-    }
-  }
-
-  // Bun readline 不发 keypress 事件, 但内部 _ttyWrite 收到全部按键 — 拦截 Shift+Tab 后透传
-  const anyRl = rl as unknown as { _ttyWrite?: (d: unknown, k: unknown) => unknown }
-  const origWrite = anyRl._ttyWrite?.bind(rl)
-  if (origWrite) {
-    anyRl._ttyWrite = (d: unknown, k: unknown) => {
-      const key = k as { name?: string; shift?: boolean } | undefined
-      if (key && key.name === 'tab' && key.shift) {
-        void cycleMode()
-        return undefined
-      }
-      return origWrite(d, k)
-    }
-  }
-
-  let running = false
-
-  /** Slash commands: await the JSON response and render output/models locally. */
-  async function runCommand(text: string): Promise<void> {
-    running = true
-    try {
-      const res = await fetch(base + '/session/' + sessionId + '/prompt', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text: text }),
-      })
-      const body = (await res.json().catch(() => ({}))) as {
-        output?: string
-        models?: Array<{ id: string; label?: string }>
-        sessionId?: string
-        error?: string
-      }
-      if (body.output) console.log(body.output)
-      else if (Array.isArray(body.models)) {
-        for (const m of body.models) console.log(m.id + (m.label ? '  ' + m.label : ''))
-      } else if (body.error) console.log('\x1b[31m' + body.error + '\x1b[0m')
-      else if (body.sessionId) console.log('[session] ' + body.sessionId)
-      if (body.sessionId) sessionId = body.sessionId
-    } catch (e) {
-      console.error('error: ' + (e instanceof Error ? e.message : String(e)))
-    } finally {
-      running = false
-      rl.prompt(true)
-    }
-  }
-
-  rl.on('line', (line: string) => {
-    const text = line.trim()
-    if (!text) {
-      rl.prompt()
-      return
-    }
-    if (text === '/exit') process.exit(0)
-    if (text.startsWith('/')) {
-      void runCommand(text)
-      return
-    }
-    running = true
-    api(base, '/session/' + sessionId + '/prompt', {
-      method: 'POST',
-      body: JSON.stringify({ text: text }),
-    }).catch((e: unknown) => {
-      running = false
-      console.error('error: ' + (e instanceof Error ? e.message : String(e)))
-      rl.prompt()
-    })
-  })
-
-  process.on('SIGINT', () => {
-    if (running) {
-      void api(base, '/session/' + sessionId + '/abort', { method: 'POST' })
-      console.log('\n\x1b[2m[aborting...]\x1b[0m')
-    } else {
+  // Ink 渲染: 必须在全部初始 fetch 之后 (Bun bug 涉及在途流式 fetch + stdin raw;
+  // 此处不再持有流式 fetch, 之后的轮询均为瞬时短请求).
+  const banner = '[materin] session ' + sessionId + ' — Shift+Tab 模式 · /help 命令 · Ctrl+C 中止/退出'
+  const { renderApp } = await import('./components/render-app')
+  const app = renderApp({
+    version: core.VERSION,
+    base: base,
+    sessionId: sessionId,
+    initialMode: currentMode,
+    model: process.env.MATERIN_MODEL ?? 'claude-sonnet-5-5',
+    banner: banner,
+    onExit: () => {
+      app.unmount()
       process.exit(0)
-    }
+    },
   })
-
-  setInterval(() => {}, 60_000)
+  await app.waitUntilExit()
 }
 
 main().catch((e: unknown) => {

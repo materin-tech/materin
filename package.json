@@ -24,6 +24,10 @@
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.74.0",
-    "dingtalk-stream": "^2.1.6-beta.1"
+    "@types/react": "18",
+    "dingtalk-stream": "^2.1.6-beta.1",
+    "ink": "5",
+    "react": "18",
+    "react-devtools-core": "^8.0.0"
   }
 }

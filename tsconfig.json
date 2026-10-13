@@ -10,12 +10,29 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@materin/ai": ["packages/ai/src/index.ts"],
-      "@materin/core": ["packages/core/src/index.ts"],
-      "@materin/server": ["packages/server/src/app.ts"],
-      "@materin/sdk": ["packages/sdk/src/client.ts"],
-      "@materin/gateway": ["packages/gateway/src/index.ts"]
-    }
+      "@materin/ai": [
+        "packages/ai/src/index.ts"
+      ],
+      "@materin/core": [
+        "packages/core/src/index.ts"
+      ],
+      "@materin/server": [
+        "packages/server/src/app.ts"
+      ],
+      "@materin/sdk": [
+        "packages/sdk/src/client.ts"
+      ],
+      "@materin/gateway": [
+        "packages/gateway/src/index.ts"
+      ]
+    },
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
   },
-  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "extensions/examples/**/*.ts"]
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/test/**/*.ts",
+    "extensions/examples/**/*.ts",
+    "packages/*/src/**/*.tsx"
+  ]
 }
